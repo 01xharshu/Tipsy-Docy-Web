@@ -1,0 +1,22 @@
+
+> tipsy-docy@1.0.0 test:e2e
+> playwright test
+
+[WebServer] (node:98801) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 1 worker
+
+(node:98811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/e2e/workflows.spec.ts:35:5 › PDF: real thumbnails, incomplete grid, drag/nudge, undo, vector export and reopen (1.6s)
+  ✓  2 [chromium] › tests/e2e/workflows.spec.ts:102:5 › Document: format, table, settings, live preview, persistence, searchable export and arrange (4.1s)
+  ✓  3 [chromium] › tests/e2e/workflows.spec.ts:225:5 › Malformed PDF, HTML sanitization, quick tools, responsive navigation (1.5s)
+  ✓  4 [chromium] › tests/e2e/workflows.spec.ts:268:5 › Refresh recovery, DOCX import/export, editable backup, empty document, and page breaks (2.8s)
+  ✓  5 [chromium] › tests/e2e/workflows.spec.ts:356:5 › Real file drop, selection ranges, duplicate/remove/rotate and project management (1.9s)
+  ✓  6 [chromium] › tests/e2e/workflows.spec.ts:413:5 › Long document pagination, images, custom presets, keyboard export, and browser print (2.2s)
+  ✓  7 [chromium] › tests/e2e/workflows.spec.ts:499:5 › Storage failure remains visible and exports remain functional (2.0s)
+  ✓  8 [chromium] › tests/e2e/workflows.spec.ts:525:5 › Workspace accessibility and smaller-screen editing (2.7s)
+  ✓  9 [chromium] › tests/e2e/workflows.spec.ts:579:5 › Consecutive page breaks preserve intentionally blank output pages (1.6s)
+
+  9 passed (22.7s)

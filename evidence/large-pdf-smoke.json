@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-10-08T11:26:57.698Z",
+  "fixture": "128 simple vector text pages, 300 x 400 pt; synthetic smoke test, not a general performance benchmark",
+  "grid": "8 x 8",
+  "sheets": 2,
+  "layoutReadyMs": 143,
+  "exportAndReopenMs": 249,
+  "exportBytes": 79369
+}
