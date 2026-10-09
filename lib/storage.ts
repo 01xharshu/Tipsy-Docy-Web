@@ -42,12 +42,25 @@ export async function listProjects(): Promise<Project[]> {
 export async function deleteProject(id: string) {
   await (await db()).delete("projects", id);
 }
+// Chunk conversion avoids spreading a large PDF into function arguments.
+function encodeBytes(bytes: Uint8Array): string {
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += 32768)
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 32768)));
+  return btoa(chunks.join(""));
+}
+function decodeBytes(value: string): Uint8Array {
+  if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value))
+    throw new Error("Invalid source encoding in project backup.");
+  const binary = atob(value);
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
 export function serializeProject(p: Project) {
   return JSON.stringify({
     ...p,
     format: "tipsy-docy",
-    version: 1,
-    sources: p.sources.map((s) => ({ ...s, bytes: Array.from(s.bytes) })),
+    version: 2,
+    sources: p.sources.map((s) => ({ ...s, bytes: encodeBytes(s.bytes) })),
   });
 }
 const finite = z.number().finite();
@@ -60,7 +73,7 @@ const dimensionsSchema = {
 };
 const backupSchema = z.object({
   format: z.literal("tipsy-docy"),
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   title: z.string().max(500),
   kind: z.enum(["pdf", "document"]),
   html: z.string().max(20000000),
@@ -69,7 +82,7 @@ const backupSchema = z.object({
       id: z.string(),
       name: z.string().max(500),
       count: z.number().int().positive(),
-      bytes: z.array(z.number().int().min(0).max(255)),
+      bytes: z.union([z.array(z.number().int().min(0).max(255)), z.string()]),
     }),
   ),
   pages: z.array(
@@ -119,6 +132,14 @@ export function deserializeProject(text: string): Project {
     );
   const p = result.data;
   if (
+    p.sources.some((s) =>
+      p.version === 1
+        ? typeof s.bytes === "string"
+        : typeof s.bytes !== "string",
+    )
+  )
+    throw new Error("Source encoding does not match the backup version.");
+  if (
     new Set(p.sources.map((s) => s.id)).size !== p.sources.length ||
     new Set(p.pages.map((s) => s.id)).size !== p.pages.length
   )
@@ -132,6 +153,12 @@ export function deserializeProject(text: string): Project {
     ...p,
     id: crypto.randomUUID(),
     updated: Date.now(),
-    sources: p.sources.map((s) => ({ ...s, bytes: new Uint8Array(s.bytes) })),
+    sources: p.sources.map((s) => ({
+      ...s,
+      bytes:
+        typeof s.bytes === "string"
+          ? decodeBytes(s.bytes)
+          : new Uint8Array(s.bytes),
+    })),
   };
 }

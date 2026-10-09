@@ -974,7 +974,7 @@ p {
 }
 .two-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
 .source-pages {
@@ -2035,6 +2035,15 @@ legend {
   }
 }
 @media print {
+  .editor-panel,
+  .document-toolbar,
+  .document-subbar,
+  .document-status,
+  .document-properties,
+  .split-handle,
+  .document-find {
+    display: none !important;
+  }
   html,
   body {
     background: white !important;
@@ -2174,4 +2183,155 @@ legend {
   .workspace-header .project-title {
     width: 170px;
   }
+}
+
+/* Editor page geometry remains in points; zoom changes only the editing viewport. */
+.editor-sheet {
+  margin: auto;
+}
+.document-ruler {
+  position: sticky;
+  top: -28px;
+  z-index: 2;
+  height: 26px;
+  background: #fafaf7;
+  border: 1px solid #d8ddd4;
+  color: #4d5748;
+}
+.ruler-margin {
+  position: absolute;
+  height: 100%;
+  background: #e4e7df;
+}
+.ruler-ticks {
+  position: absolute;
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    #9ca794 0 1px,
+    transparent 1px 9px
+  );
+  background-size: auto 5px;
+  background-repeat: repeat-x;
+}
+.ruler-ticks span {
+  position: absolute;
+  top: 8px;
+  font-size: 8px;
+}
+.editor-text-boundaries {
+  outline: 1px dashed #bec9b4;
+  outline-offset: 3px;
+}
+.document-content .ProseMirror {
+  min-height: inherit;
+}
+.editor-text-area > div,
+.editor-text-area .ProseMirror {
+  min-height: inherit;
+}
+.document-content {
+  tab-size: 4;
+}
+.document-content [data-type="blockGroup"] {
+  display: flow-root;
+}
+.editor-text-boundaries [data-type="blockGroup"] {
+  outline: 1px dashed #bcccb1;
+  outline-offset: 3px;
+}
+.measure-content [data-type="blockGroup"] {
+  outline: none;
+}
+.document-find {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.document-find label {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.document-find input {
+  max-width: 145px;
+}
+.source-navigation {
+  margin: 12px 0;
+}
+@media (max-width: 600px) {
+  .document-find {
+    padding: 7px;
+    gap: 5px;
+  }
+  .document-find input {
+    max-width: 110px;
+  }
+}
+.ruler-handle {
+  position: absolute;
+  top: 15px;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: #486234;
+  z-index: 3;
+  cursor: ew-resize;
+  touch-action: none;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.ruler-handle.firstLine {
+  top: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.ruler-handle:focus-visible {
+  background: #111;
+  box-shadow: 0 0 0 2px white;
+}
+.document-content sup,
+.document-content sub {
+  font-size: 0.75em;
+  line-height: 0;
+}
+
+.two-fields > *,
+.field input,
+.field select,
+.properties fieldset {
+  min-width: 0;
+}
+.editor-flow-spacer {
+  display: block;
+  width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  font-size: 0;
+  line-height: 0;
+  pointer-events: none;
+}
+.editor-page-cut {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--canvas);
+  z-index: 1;
+  pointer-events: none;
+  border-top: 1px solid #d8ddd4;
+  border-bottom: 1px solid #d8ddd4;
+}
+.measure-content p:empty::before {
+  content: "\200B";
+}
+
+.editor-paper .ProseMirror:focus-visible {
+  outline: none;
 }

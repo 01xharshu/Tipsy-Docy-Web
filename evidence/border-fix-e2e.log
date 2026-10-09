@@ -1,0 +1,18 @@
+
+> tipsy-docy@1.0.0 test:e2e
+> playwright test --grep Document blocks|Editable automatic|Long-paragraph|Workspace accessibility|Typing controls
+
+[WebServer] (node:99743) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 1 worker
+
+(node:99761) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/e2e/workflows.spec.ts:526:5 › Workspace accessibility and smaller-screen editing (6.0s)
+  ✓  2 [chromium] › tests/e2e/workflows.spec.ts:654:5 › Document blocks preserve spacing, cursor formatting, find/replace, PDF and DOCX (5.1s)
+  ✓  3 [chromium] › tests/e2e/workflows.spec.ts:763:5 › Typing controls follow the cursor, ruler pointer drag and keyboard find undo (2.8s)
+  ✓  4 [chromium] › tests/e2e/workflows.spec.ts:820:5 › Editable automatic pages align with preview and preserve typing across sheets (2.5s)
+  ✓  5 [chromium] › tests/e2e/workflows.spec.ts:881:5 › Long-paragraph page boundaries retain text and exact preview coordinates (2.0s)
+
+  5 passed (24.8s)

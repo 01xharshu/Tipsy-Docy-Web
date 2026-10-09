@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-10-09T05:44:47.435Z",
+  "fixture": "48 unique 960x1280 JPEG image pages, deterministic synthetic noise; not a general/device benchmark",
+  "inputBytes": 29506813,
+  "sourcePages": 48,
+  "grid": "8x8",
+  "outputSheets": 1,
+  "mountedSourceCards": 40,
+  "lastThumbnailRendered": true,
+  "layoutReadyMs": 9021,
+  "exportAndReopenMs": 4178,
+  "outputBytes": 29521815,
+  "pageErrors": []
+}

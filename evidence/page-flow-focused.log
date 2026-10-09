@@ -1,0 +1,14 @@
+
+> tipsy-docy@1.0.0 test:e2e
+> playwright test --grep Editable automatic
+
+[WebServer] (node:92887) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:92903) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › tests/e2e/workflows.spec.ts:820:5 › Editable automatic pages align with preview and preserve typing across sheets (1.7s)
+
+  1 passed (4.4s)

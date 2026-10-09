@@ -24,3 +24,31 @@ it("rejects invalid settings and broken page references", () => {
   expect(() => deserializeProject("{}")).toThrow();
   expect(() => deserializeProject("not json")).toThrow();
 });
+
+it("uses compact source encoding for large backups and preserves all byte values", () => {
+  const p = newProject("pdf");
+  const bytes = Uint8Array.from({ length: 1024 * 1024 }, (_, i) => i % 256);
+  p.sources = [{ id: "large", name: "large.pdf", bytes, count: 1 }];
+  const text = serializeProject(p);
+  expect(JSON.parse(text).version).toBe(2);
+  expect(text.length).toBeLessThan(bytes.length * 1.35);
+  expect(deserializeProject(text).sources[0].bytes).toEqual(bytes);
+});
+it("imports legacy version-one backups", () => {
+  const p = newProject("pdf");
+  const raw = JSON.parse(serializeProject(p));
+  raw.version = 1;
+  raw.sources = [
+    { id: "old", name: "legacy.pdf", count: 1, bytes: [0, 128, 255] },
+  ];
+  expect(deserializeProject(JSON.stringify(raw)).sources[0].bytes).toEqual(
+    new Uint8Array([0, 128, 255]),
+  );
+});
+it("rejects corrupt base64 and version/encoding mismatches", () => {
+  const raw = JSON.parse(serializeProject(newProject("pdf")));
+  raw.sources = [{ id: "bad", name: "bad.pdf", count: 1, bytes: "!!==" }];
+  expect(() => deserializeProject(JSON.stringify(raw))).toThrow("encoding");
+  raw.sources[0].bytes = [1, 2];
+  expect(() => deserializeProject(JSON.stringify(raw))).toThrow("version");
+});

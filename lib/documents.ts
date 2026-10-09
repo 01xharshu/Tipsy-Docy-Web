@@ -19,6 +19,7 @@ if (typeof window !== "undefined")
         "background-color",
         "line-height",
         "text-align",
+        "text-indent",
         "margin",
         "margin-left",
         "margin-right",
@@ -111,7 +112,14 @@ export type DocModel = {
   header: string;
   footer: string;
   numbers: boolean;
+  flowGaps: {
+    offset: number;
+    height: number;
+    targetTop?: number;
+    tag?: string;
+  }[];
 };
+export const EDITOR_PAGE_GAP = 24;
 // Measure in CSS points (1 CSS px becomes 1 PDF point). Both preview and PDF consume this model.
 export function paginate(
   root: HTMLElement,
@@ -131,6 +139,7 @@ export function paginate(
     header: settings.header,
     footer: settings.footer,
     numbers: settings.numbers,
+    flowGaps: [],
   };
   const base = root.getBoundingClientRect();
   const page = (i: number) => {
@@ -139,7 +148,42 @@ export function paginate(
     return model.pages[i];
   };
 
-  let extra = 0;
+  let extra = 0,
+    tokenOffset = 0,
+    inserted = 0;
+  const flow = (
+    offset: number,
+    index: number,
+    targetTop?: number,
+    tag?: string,
+  ) => {
+    const total = extra + index * (2 * margin + EDITOR_PAGE_GAP);
+    if (total > inserted + 0.1) {
+      model.flowGaps.push({ offset, height: total - inserted, targetTop, tag });
+      inserted = total;
+    }
+  };
+  const semantic = new Set([
+    "P",
+    "PRE",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "UL",
+    "OL",
+    "LI",
+    "BLOCKQUOTE",
+    "TABLE",
+    "TR",
+    "TD",
+    "TH",
+    "IMG",
+    "HR",
+    "BR",
+  ]);
   const walker = document.createTreeWalker(
     root,
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
@@ -147,6 +191,32 @@ export function paginate(
   let node: Node | null;
   while ((node = walker.nextNode())) {
     if (node instanceof HTMLElement) {
+      const isBreak = node.dataset.type === "pageBreak";
+      const isBlock =
+        semantic.has(node.tagName) ||
+        node.dataset.type === "blockGroup" ||
+        isBreak;
+      const currentOffset = tokenOffset;
+      if (isBlock) tokenOffset++;
+      if (
+        !isBreak &&
+        ["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "TABLE"].includes(
+          node.tagName,
+        )
+      ) {
+        const r = node.getBoundingClientRect(),
+          pos = r.top - base.top + extra;
+        if (r.height <= usable && (pos % usable) + r.height > usable)
+          extra += usable - (pos % usable);
+        const idx = Math.floor((r.top - base.top + extra) / usable);
+        page(idx);
+        flow(
+          currentOffset,
+          idx,
+          r.top - base.top + extra + idx * (2 * margin + EDITOR_PAGE_GAP),
+          node.tagName,
+        );
+      }
       if (node.tagName === "LI") {
         const r = node.getBoundingClientRect(),
           st = getComputedStyle(node);
@@ -166,7 +236,7 @@ export function paginate(
               ? "[x]"
               : "[ ]"
             : parent?.tagName === "OL"
-              ? `${siblings.indexOf(node) + 1}.`
+              ? `${siblings.indexOf(node) + (Number(parent.getAttribute("start")) || 1)}.`
               : "•";
         page(Math.floor(pos / usable)).text.push({
           text: marker,
@@ -187,6 +257,7 @@ export function paginate(
       if (node.tagName === "HR") {
         const r = node.getBoundingClientRect(),
           pos = r.top - base.top + extra;
+        flow(currentOffset, Math.floor(pos / usable));
         page(Math.floor(pos / usable)).boxes.push({
           x: r.left - base.left + margin,
           y: (pos % usable) + margin,
@@ -199,7 +270,9 @@ export function paginate(
       if (node.dataset.type === "pageBreak") {
         const pos = node.getBoundingClientRect().top - base.top + extra;
         extra += usable - (pos % usable);
-        page(Math.floor((pos + usable - (pos % usable)) / usable));
+        const idx = Math.floor((pos + usable - (pos % usable)) / usable);
+        page(idx);
+        flow(tokenOffset, idx);
         continue;
       }
       if (
@@ -215,6 +288,7 @@ export function paginate(
           idx++;
           y = 0;
         }
+        flow(currentOffset, idx);
         page(idx).images.push({
           src: node.src,
           x: r.left - base.left + margin,
@@ -238,9 +312,11 @@ export function paginate(
       }
       continue;
     }
-    if (!node.textContent?.trim()) continue;
+    if (!node.textContent) continue;
     const parent = node.parentElement;
     if (!parent || parent.closest('[data-type="pageBreak"]')) continue;
+    if (!node.textContent.trim() && !parent.closest("p,pre,h1,h2,h3,h4,h5,h6"))
+      continue;
     const style = getComputedStyle(parent);
     const range = document.createRange();
     let run: TextRun | null = null;
@@ -259,6 +335,11 @@ export function paginate(
         idx++;
         y = 0;
       }
+      flow(
+        tokenOffset + i,
+        idx,
+        rect.top - base.top + extra + idx * (2 * margin + EDITOR_PAGE_GAP),
+      );
       if (!run || Math.abs(rect.top - lastTop) > 2) {
         run = {
           text: node.textContent[i],
@@ -282,6 +363,7 @@ export function paginate(
         run.width = rect.right - base.left + margin - run.x;
       }
     }
+    tokenOffset += node.textContent.length;
     range.detach();
   }
   return model;

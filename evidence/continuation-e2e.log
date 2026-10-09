@@ -1,0 +1,25 @@
+
+> tipsy-docy@1.0.0 test:e2e
+> playwright test
+
+[WebServer] (node:84468) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 12 tests using 1 worker
+
+(node:84546) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › tests/e2e/workflows.spec.ts:36:5 › PDF: real thumbnails, incomplete grid, drag/nudge, undo, vector export and reopen (3.2s)
+  ✓   2 [chromium] › tests/e2e/workflows.spec.ts:103:5 › Document: format, table, settings, live preview, persistence, searchable export and arrange (8.1s)
+  ✓   3 [chromium] › tests/e2e/workflows.spec.ts:226:5 › Malformed PDF, HTML sanitization, quick tools, responsive navigation (1.7s)
+  ✓   4 [chromium] › tests/e2e/workflows.spec.ts:269:5 › Refresh recovery, DOCX import/export, editable backup, empty document, and page breaks (3.9s)
+  ✓   5 [chromium] › tests/e2e/workflows.spec.ts:357:5 › Real file drop, selection ranges, duplicate/remove/rotate and project management (2.3s)
+  ✓   6 [chromium] › tests/e2e/workflows.spec.ts:414:5 › Long document pagination, images, custom presets, keyboard export, and browser print (3.4s)
+  ✓   7 [chromium] › tests/e2e/workflows.spec.ts:500:5 › Storage failure remains visible and exports remain functional (2.3s)
+  ✓   8 [chromium] › tests/e2e/workflows.spec.ts:526:5 › Workspace accessibility and smaller-screen editing (3.4s)
+  ✓   9 [chromium] › tests/e2e/workflows.spec.ts:580:5 › Consecutive page breaks preserve intentionally blank output pages (1.8s)
+  ✓  10 [chromium] › tests/e2e/workflows.spec.ts:609:5 › Large PDF source navigation bounds mounted thumbnails and restores compact backups (1.1s)
+  ✓  11 [chromium] › tests/e2e/workflows.spec.ts:654:5 › Document blocks preserve spacing, cursor formatting, find/replace, PDF and DOCX (4.0s)
+  ✓  12 [chromium] › tests/e2e/workflows.spec.ts:763:5 › Typing controls follow the cursor, ruler pointer drag and keyboard find undo (2.2s)
+
+  12 passed (44.5s)

@@ -15,7 +15,7 @@ import {
 } from "@tiptap/extension-table";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import { Node, Mark, mergeAttributes } from "@tiptap/core";
 import {
   useEffect,
   useState,
@@ -54,6 +54,7 @@ import {
   importDocument,
   sanitize,
   type DocModel,
+  EDITOR_PAGE_GAP,
 } from "@/lib/documents";
 import {
   saveDocumentPreset,
@@ -61,34 +62,27 @@ import {
   deleteDocumentPreset,
 } from "@/lib/storage";
 import type { Editor } from "@tiptap/react";
-const ParagraphLayout = Extension.create({
-  name: "paragraphLayout",
-  addGlobalAttributes() {
-    return [
-      {
-        types: ["paragraph", "heading"],
-        attributes: {
-          lineHeight: {
-            default: null,
-            parseHTML: (e) => e.style.lineHeight,
-            renderHTML: (a) =>
-              a.lineHeight ? { style: `line-height:${a.lineHeight}` } : {},
-          },
-          spaceAfter: {
-            default: null,
-            parseHTML: (e) => e.style.marginBottom,
-            renderHTML: (a) =>
-              a.spaceAfter ? { style: `margin-bottom:${a.spaceAfter}` } : {},
-          },
-          indent: {
-            default: 0,
-            parseHTML: (e) => parseInt(e.style.marginLeft) || 0,
-            renderHTML: (a) =>
-              a.indent ? { style: `margin-left:${a.indent}px` } : {},
-          },
-        },
-      },
-    ];
+import { ParagraphLayout, BlockGroup } from "@/lib/editor-layout";
+import { closeHistory } from "@tiptap/pm/history";
+import { PageFlow, updatePageFlow } from "@/lib/page-flow";
+const Superscript = Mark.create({
+  name: "superscript",
+  excludes: "subscript",
+  parseHTML() {
+    return [{ tag: "sup" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["sup", HTMLAttributes, 0];
+  },
+});
+const Subscript = Mark.create({
+  name: "subscript",
+  excludes: "superscript",
+  parseHTML() {
+    return [{ tag: "sub" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["sub", HTMLAttributes, 0];
   },
 });
 const PageBreak = Node.create({
@@ -159,7 +153,12 @@ export default function DocumentStudio({
     [showEditor, setShowEditor] = useState(true),
     [showPreview, setShowPreview] = useState(true),
     [showSettings, setShowSettings] = useState(false),
-    [split, setSplit] = useState(50);
+    [split, setSplit] = useState(50),
+    [editZoom, setEditZoom] = useState(1),
+    [showBoundaries, setShowBoundaries] = useState(false),
+    [showFind, setShowFind] = useState(false),
+    [findText, setFindText] = useState(""),
+    [replaceText, setReplaceText] = useState("");
   const measure = useRef<HTMLDivElement>(null),
     file = useRef<HTMLInputElement>(null),
     image = useRef<HTMLInputElement>(null),
@@ -173,6 +172,8 @@ export default function DocumentStudio({
       StarterKit.configure({
         link: { openOnClick: false, protocols: ["https", "http", "mailto"] },
       }),
+      Superscript,
+      Subscript,
       TextStyle,
       FontFamily,
       FontSize,
@@ -186,6 +187,8 @@ export default function DocumentStudio({
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
+      PageFlow,
+      BlockGroup,
       ParagraphLayout,
       PageBreak,
     ],
@@ -193,6 +196,17 @@ export default function DocumentStudio({
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
+      handleKeyDown: (_view, event) => {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          ["f", "h"].includes(event.key.toLowerCase())
+        ) {
+          event.preventDefault();
+          setShowFind(true);
+          return true;
+        }
+        return false;
+      },
       attributes: {
         class: "document-content",
         spellcheck: "true",
@@ -207,19 +221,20 @@ export default function DocumentStudio({
   // ProseMirror owns active editing state. External undo/redo is applied explicitly
   // by the workspace; echoing every React snapshot back into the editor races typing.
   const recompute = useCallback(() => {
-    if (!measure.current) return;
+    if (!measure.current || window.matchMedia("print").matches) return;
     try {
       const next = paginate(measure.current, pRef.current.doc);
       modelRef.current = next;
       setModel(next);
+      if (editor && !editor.isDestroyed) updatePageFlow(editor, next);
     } catch (e) {
       report(String(e));
     }
-  }, [report]);
+  }, [report, editor]);
   useEffect(() => {
     const timer = setTimeout(recompute, 250);
     return () => clearTimeout(timer);
-  }, [p.html, p.doc, recompute]);
+  }, [p.html, p.doc, recompute, showEditor]);
   useEffect(() => {
     const observer = new ResizeObserver(recompute);
     if (measure.current) observer.observe(measure.current);
@@ -258,8 +273,158 @@ export default function DocumentStudio({
   }));
   const doc = (patch: Partial<DocumentSettings>) =>
     change({ ...p, doc: { ...p.doc, ...patch } });
-  const [width] = dimensions(p.doc);
+  const [width, height] = dimensions(p.doc);
   const contentWidth = width - 2 * p.doc.margin;
+  const paragraphType = editor?.isActive("heading") ? "heading" : "paragraph";
+  const paragraphAttrs = editor?.getAttributes(paragraphType) || {};
+  const blockAttrs = editor?.getAttributes("blockGroup") || {};
+  function spacingControl(
+    label: string,
+    attribute: string,
+    group = false,
+    fallback = 0,
+  ) {
+    const type = group ? "blockGroup" : paragraphType;
+    const attrs = group ? blockAttrs : paragraphAttrs;
+    return (
+      <label className="field" key={label}>
+        {label} (pt)
+        <input
+          aria-label={label}
+          type="number"
+          min={attribute === "firstLine" ? -120 : 0}
+          max={240}
+          value={
+            attrs[attribute] == null
+              ? fallback
+              : parseFloat(attrs[attribute]) || 0
+          }
+          disabled={group && !editor?.isActive("blockGroup")}
+          onChange={(e) => {
+            editor
+              ?.chain()
+              .updateAttributes(type, { [attribute]: Number(e.target.value) })
+              .run();
+          }}
+        />
+      </label>
+    );
+  }
+  function rulerHandle(
+    attribute: "indent" | "rightIndent" | "firstLine",
+    label: string,
+  ) {
+    const value = Number(paragraphAttrs[attribute]) || 0;
+    const max = Math.min(240, contentWidth - 60);
+    const min = attribute === "firstLine" ? -120 : 0;
+    const position =
+      attribute === "rightIndent"
+        ? contentWidth - value
+        : value +
+          (attribute === "firstLine" ? Number(paragraphAttrs.indent) || 0 : 0);
+    const set = (n: number) =>
+      editor?.commands.updateAttributes(paragraphType, {
+        [attribute]: Math.max(min, Math.min(max, Math.round(n))),
+      });
+    return (
+      <button
+        key={attribute}
+        role="slider"
+        aria-label={label}
+        aria-valuenow={value}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-orientation="horizontal"
+        title={`${label}: ${value} pt. Drag or use arrow keys.`}
+        className={`ruler-handle ${attribute}`}
+        style={{ left: p.doc.margin + position }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+            e.preventDefault();
+            set(
+              value + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1),
+            );
+          }
+        }}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          if (editor) editor.view.dispatch(closeHistory(editor.state.tr));
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const target = e.currentTarget,
+            start = e.clientX;
+          const ratio =
+            target.parentElement!.getBoundingClientRect().width / width;
+          const move = (event: PointerEvent) =>
+            set(
+              value +
+                ((event.clientX - start) / ratio) *
+                  (attribute === "rightIndent" ? -1 : 1),
+            );
+          const end = () => {
+            target.removeEventListener("pointermove", move);
+            target.removeEventListener("pointerup", end);
+            target.removeEventListener("pointercancel", end);
+            if (editor) editor.view.dispatch(closeHistory(editor.state.tr));
+            editor?.view.focus();
+          };
+          target.addEventListener("pointermove", move);
+          target.addEventListener("pointerup", end);
+          target.addEventListener("pointercancel", end);
+        }}
+      />
+    );
+  }
+  function matches() {
+    const found: { from: number; to: number }[] = [];
+    if (!editor || !findText) return found;
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isTextblock) return;
+      const text = node.textBetween(0, node.content.size, "", "\ufffc");
+      let offset = 0;
+      while ((offset = text.indexOf(findText, offset)) !== -1) {
+        found.push({
+          from: pos + 1 + offset,
+          to: pos + 1 + offset + findText.length,
+        });
+        offset += findText.length;
+      }
+      return false;
+    });
+    return found;
+  }
+  const found = matches();
+  function findNext() {
+    const next =
+      found.find((m) => m.from >= (editor?.state.selection.to || 0)) ||
+      found[0];
+    if (next) {
+      editor?.chain().setTextSelection(next).scrollIntoView().run();
+      editor?.view.focus();
+    }
+  }
+  function replace(all: boolean) {
+    if (!editor || !found.length) return;
+    const selection = editor.state.selection;
+    const current =
+      found.find((m) => m.from === selection.from && m.to === selection.to) ||
+      found[0];
+    const tr = closeHistory(editor.state.tr);
+    for (const m of (all ? found : [current]).slice().reverse()) {
+      if (replaceText)
+        tr.replaceWith(
+          m.from,
+          m.to,
+          editor.schema.text(
+            replaceText,
+            editor.state.doc.resolve(m.from).marks(),
+          ),
+        );
+      else tr.delete(m.from, m.to);
+    }
+    editor.view.dispatch(tr);
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    editor.view.focus();
+  }
   const action = (
     name: string,
     icon: React.ReactNode,
@@ -284,7 +449,11 @@ export default function DocumentStudio({
     try {
       report(`Importing ${f.name}…`);
       const result = await importDocument(f);
-      editor?.commands.setContent(result.html);
+      if (editor) {
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        editor.commands.setContent(result.html);
+        editor.view.dispatch(closeHistory(editor.state.tr));
+      }
       change({
         ...p,
         title: f.name.replace(/\.[^.]+$/, ""),
@@ -358,7 +527,7 @@ export default function DocumentStudio({
             onChange={(e) =>
               editor?.chain().focus().setFontFamily(e.target.value).run()
             }
-            defaultValue="Arial"
+            value={editor?.getAttributes("textStyle").fontFamily || "Arial"}
           >
             <option>Arial</option>
             <option>Georgia</option>
@@ -371,7 +540,9 @@ export default function DocumentStudio({
             onChange={(e) =>
               editor?.chain().focus().setFontSize(`${e.target.value}px`).run()
             }
-            defaultValue="12"
+            value={parseFloat(
+              editor?.getAttributes("textStyle").fontSize || "12",
+            )}
           >
             {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64].map(
               (n) => (
@@ -414,6 +585,22 @@ export default function DocumentStudio({
               editor?.chain().focus().toggleStrike().run();
             },
             editor?.isActive("strike"),
+          )}
+          {action(
+            "Superscript",
+            <span>x²</span>,
+            () => {
+              editor?.chain().focus().toggleMark("superscript").run();
+            },
+            editor?.isActive("superscript"),
+          )}
+          {action(
+            "Subscript",
+            <span>x₂</span>,
+            () => {
+              editor?.chain().focus().toggleMark("subscript").run();
+            },
+            editor?.isActive("subscript"),
           )}
           <label className="toolbar-color" title="Text color">
             A
@@ -537,8 +724,72 @@ export default function DocumentStudio({
           }}
         />
       </div>
+      {showFind && (
+        <div
+          className="document-find"
+          role="search"
+          aria-label="Find and replace"
+        >
+          <label>
+            Find{" "}
+            <input
+              autoFocus
+              aria-label="Find text"
+              value={findText}
+              onChange={(e) => setFindText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") findNext();
+                if (e.key === "Escape") setShowFind(false);
+              }}
+            />
+          </label>
+          <label>
+            Replace{" "}
+            <input
+              aria-label="Replacement text"
+              value={replaceText}
+              onChange={(e) => setReplaceText(e.target.value)}
+            />
+          </label>
+          <span className="tiny" role="status">
+            {found.length} matches
+          </span>
+          <button
+            className="button small"
+            disabled={!found.length}
+            onClick={findNext}
+          >
+            Find next
+          </button>
+          <button
+            className="button small"
+            disabled={!found.length}
+            onClick={() => replace(false)}
+          >
+            Replace
+          </button>
+          <button
+            className="button small"
+            disabled={!found.length}
+            onClick={() => replace(true)}
+          >
+            Replace all
+          </button>
+          <button
+            className="text-button tiny"
+            onClick={() => setShowFind(false)}
+          >
+            Close find
+          </button>
+        </div>
+      )}
       <div className="document-subbar">
-        <span className="tiny muted">WRITE SOMETHING WORTH A PAGE</span>
+        <button
+          className="text-button tiny"
+          onClick={() => setShowFind(!showFind)}
+        >
+          Find & replace
+        </button>
         <div className="row">
           <button
             className="text-button tiny"
@@ -569,18 +820,86 @@ export default function DocumentStudio({
           >
             <div className="panel-heading">
               <h2>Your document</h2>
-              <span className="tiny muted">EDITABLE</span>
+              <label className="row tiny">
+                Editor zoom
+                <select
+                  aria-label="Editor zoom"
+                  value={editZoom}
+                  onChange={(e) => setEditZoom(Number(e.target.value))}
+                >
+                  {[0.5, 0.65, 0.75, 1, 1.25, 1.5].map((z) => (
+                    <option key={z} value={z}>
+                      {Math.round(z * 100)}%
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="editor-scroll">
-              <div
-                className="editor-paper"
-                style={{
-                  width: width,
-                  padding: p.doc.margin,
-                  background: p.doc.background,
-                }}
-              >
-                <EditorContent editor={editor} />
+              <div className="editor-sheet" style={{ width, zoom: editZoom }}>
+                <div
+                  className="document-ruler"
+                  aria-label="Document ruler in points"
+                  style={{ width }}
+                >
+                  <div
+                    className="ruler-margin"
+                    style={{ width: p.doc.margin }}
+                  />
+                  <div
+                    className="ruler-ticks"
+                    style={{ left: p.doc.margin, right: p.doc.margin }}
+                  >
+                    {Array.from(
+                      { length: Math.floor(contentWidth / 36) + 1 },
+                      (_, i) => (
+                        <span key={i} style={{ left: i * 36 }}>
+                          {i * 36}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                  <div
+                    className="ruler-margin"
+                    style={{ right: 0, width: p.doc.margin }}
+                  />
+                  {rulerHandle("indent", "Ruler left indent")}
+                  {rulerHandle("firstLine", "Ruler first line indent")}
+                  {rulerHandle("rightIndent", "Ruler right indent")}
+                </div>
+                <div
+                  className="editor-paper"
+                  style={{
+                    width: width,
+                    minHeight:
+                      (model?.pages.length || 1) * height +
+                      ((model?.pages.length || 1) - 1) * EDITOR_PAGE_GAP,
+                    position: "relative",
+                    padding: p.doc.margin,
+                    background: p.doc.background,
+                  }}
+                >
+                  <div
+                    className={`editor-text-area${showBoundaries ? " editor-text-boundaries" : ""}`}
+                    style={{ minHeight: height - 2 * p.doc.margin }}
+                  >
+                    <EditorContent editor={editor} />
+                  </div>
+                  {Array.from(
+                    { length: Math.max(0, (model?.pages.length || 1) - 1) },
+                    (_, i) => (
+                      <div
+                        className="editor-page-cut"
+                        aria-hidden="true"
+                        key={i}
+                        style={{
+                          top: (i + 1) * height + i * EDITOR_PAGE_GAP,
+                          height: EDITOR_PAGE_GAP,
+                        }}
+                      />
+                    ),
+                  )}
+                </div>
               </div>
             </div>
           </section>
@@ -996,31 +1315,59 @@ export default function DocumentStudio({
                       .updateAttributes(type, { lineHeight: e.target.value })
                       .run();
                   }}
-                  defaultValue="1.6"
+                  value={paragraphAttrs.lineHeight || "1.6"}
                 >
                   {[1, 1.15, 1.3, 1.5, 1.6, 1.8, 2].map((v) => (
                     <option key={v}>{v}</option>
                   ))}
                 </select>
               </label>
-              <label className="field">
-                Space after (pt)
+              {spacingControl("Space before", "spaceBefore")}
+              {spacingControl("Space after", "spaceAfter", false, 8)}
+              {spacingControl("Left margin", "indent")}
+              {spacingControl("Right margin", "rightIndent")}
+              {spacingControl("First line indent", "firstLine")}
+              <div className="two-fields">
+                {spacingControl("Paragraph padding top", "paddingTop")}
+                {spacingControl("Paragraph padding bottom", "paddingBottom")}
+                {spacingControl("Paragraph padding left", "paddingLeft")}
+                {spacingControl("Paragraph padding right", "paddingRight")}
+              </div>
+              <label className="row tiny">
                 <input
-                  type="number"
-                  min={0}
-                  defaultValue={8}
-                  onChange={(e) =>
-                    editor
-                      ?.chain()
-                      .focus()
-                      .updateAttributes(
-                        editor.isActive("heading") ? "heading" : "paragraph",
-                        { spaceAfter: `${Math.max(0, +e.target.value)}px` },
-                      )
-                      .run()
-                  }
-                />
+                  type="checkbox"
+                  checked={showBoundaries}
+                  onChange={(e) => setShowBoundaries(e.target.checked)}
+                />{" "}
+                Show text boundaries
               </label>
+              <button
+                className="button small full"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor
+                    ?.chain()
+                    .focus()
+                    .unsetAllMarks()
+                    .resetAttributes(paragraphType, [
+                      "lineHeight",
+                      "spaceBefore",
+                      "spaceAfter",
+                      "indent",
+                      "rightIndent",
+                      "firstLine",
+                      "paddingTop",
+                      "paddingRight",
+                      "paddingBottom",
+                      "paddingLeft",
+                      "textAlign",
+                    ])
+                    .run();
+                  editor?.view.focus();
+                }}
+              >
+                Clear formatting
+              </button>
               <div className="row">
                 <button
                   className="button small"
@@ -1078,6 +1425,47 @@ export default function DocumentStudio({
               >
                 Insert page break
               </button>
+            </fieldset>
+            <fieldset>
+              <legend>Document blocks</legend>
+              <p className="tiny muted">
+                Group selected paragraphs into a block. Block margins sit
+                outside its content; padding adds space inside.
+              </p>
+              <div className="row">
+                <button
+                  className="button small"
+                  disabled={!editor?.can().wrapIn("blockGroup")}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    editor?.chain().focus().wrapIn("blockGroup").run();
+                    editor?.view.focus();
+                  }}
+                >
+                  Group into block
+                </button>
+                <button
+                  className="button small"
+                  disabled={!editor?.isActive("blockGroup")}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    editor?.chain().focus().lift("blockGroup").run();
+                    editor?.view.focus();
+                  }}
+                >
+                  Ungroup block
+                </button>
+              </div>
+              <div className="two-fields">
+                {spacingControl("Block margin top", "spaceBefore", true)}
+                {spacingControl("Block margin bottom", "spaceAfter", true)}
+                {spacingControl("Block margin left", "indent", true)}
+                {spacingControl("Block margin right", "rightIndent", true)}
+                {spacingControl("Block padding top", "paddingTop", true)}
+                {spacingControl("Block padding bottom", "paddingBottom", true)}
+                {spacingControl("Block padding left", "paddingLeft", true)}
+                {spacingControl("Block padding right", "paddingRight", true)}
+              </div>
             </fieldset>
             <fieldset>
               <legend>Table controls</legend>

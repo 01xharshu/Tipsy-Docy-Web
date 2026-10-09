@@ -1,0 +1,13 @@
+
+> tipsy-docy@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.3 /Users/harshmishra/Documents/GitHub/Tipsy-Docy-Web
+
+
+ Test Files  2 passed (2)
+      Tests  19 passed (19)
+   Start at  11:13:30
+   Duration  1.59s (tests 92%, import 6%, transform 2%)
+

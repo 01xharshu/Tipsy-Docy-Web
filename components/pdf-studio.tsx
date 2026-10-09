@@ -31,6 +31,10 @@ export default function PdfStudio({ project: p, change, report }: Props) {
     [range, setRange] = useState(""),
     [busy, setBusy] = useState(false),
     [pan, setPan] = useState(false);
+  const [sourceWindow, setSourceWindow] = useState(0);
+  const sourceWindowSize = 40;
+  const windowCount = Math.max(1, Math.ceil(p.pages.length / sourceWindowSize));
+  const currentWindow = Math.min(sourceWindow, windowCount - 1);
   const input = useRef<HTMLInputElement>(null),
     viewport = useRef<HTMLDivElement>(null);
   const drag = useRef<{
@@ -246,107 +250,159 @@ export default function PdfStudio({ project: p, change, report }: Props) {
             </div>
           </>
         )}
+        {windowCount > 1 && (
+          <nav
+            aria-label="Source page navigation"
+            className="source-navigation"
+          >
+            <div className="row between">
+              <button
+                className="text-button tiny"
+                disabled={currentWindow === 0}
+                onClick={() => setSourceWindow(currentWindow - 1)}
+              >
+                Previous pages
+              </button>
+              <button
+                className="text-button tiny"
+                disabled={currentWindow === windowCount - 1}
+                onClick={() => setSourceWindow(currentWindow + 1)}
+              >
+                Next pages
+              </button>
+            </div>
+            <p className="tiny" role="status">
+              Showing {currentWindow * sourceWindowSize + 1}–
+              {Math.min((currentWindow + 1) * sourceWindowSize, p.pages.length)}{" "}
+              of {p.pages.length}
+            </p>
+            <label className="field">
+              Jump to source page
+              <input
+                type="number"
+                min={1}
+                max={p.pages.length}
+                defaultValue={currentWindow * sourceWindowSize + 1}
+                key={currentWindow}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n >= 1 && n <= p.pages.length)
+                    setSourceWindow(Math.floor((n - 1) / sourceWindowSize));
+                }}
+              />
+            </label>
+          </nav>
+        )}
         <div className="source-pages">
-          {p.pages.map((pg, i) => {
-            const source = p.sources.find((s) => s.id === pg.sourceId);
-            return (
-              source && (
-                <div
-                  key={pg.id}
-                  className={`source-page ${selected === pg.id ? "active" : ""}`}
-                  draggable
-                  onDragStart={(e) =>
-                    e.dataTransfer.setData("text/page-id", pg.id)
-                  }
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    const id = e.dataTransfer.getData("text/page-id");
-                    if (!id) return;
-                    e.preventDefault();
-                    const a = [...p.pages],
-                      from = a.findIndex((v) => v.id === id);
-                    a.splice(i, 0, a.splice(from, 1)[0]);
-                    pages(a);
-                  }}
-                >
-                  <button
-                    className="source-preview"
-                    aria-label={`Select page ${i + 1}`}
-                    onClick={() => setSelected(pg.id)}
+          {p.pages
+            .slice(
+              currentWindow * sourceWindowSize,
+              (currentWindow + 1) * sourceWindowSize,
+            )
+            .map((pg, index) => {
+              const i = currentWindow * sourceWindowSize + index;
+              const source = p.sources.find((s) => s.id === pg.sourceId);
+              return (
+                source && (
+                  <div
+                    key={pg.id}
+                    className={`source-page ${selected === pg.id ? "active" : ""}`}
+                    draggable
+                    onDragStart={(e) =>
+                      e.dataTransfer.setData("text/page-id", pg.id)
+                    }
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      const id = e.dataTransfer.getData("text/page-id");
+                      if (!id) return;
+                      e.preventDefault();
+                      const a = [...p.pages],
+                        from = a.findIndex((v) => v.id === id);
+                      if (from < 0 || from === i) return;
+                      a.splice(i, 0, a.splice(from, 1)[0]);
+                      pages(a);
+                    }}
                   >
-                    <PdfThumbnail
-                      source={source}
-                      page={pg.page}
-                      rotation={pg.rotation}
-                    />
-                  </button>
-                  <div className="row between">
-                    <label className="row">
-                      <input
-                        type="checkbox"
-                        aria-label={`Include page ${i + 1}`}
-                        checked={pg.selected}
-                        onChange={(e) =>
-                          update(pg.id, { selected: e.target.checked })
-                        }
+                    <button
+                      className="source-preview"
+                      aria-label={`Select page ${i + 1}`}
+                      onClick={() => setSelected(pg.id)}
+                    >
+                      <PdfThumbnail
+                        source={source}
+                        page={pg.page}
+                        rotation={pg.rotation}
                       />
-                      <span className="tiny">Page {i + 1}</span>
-                    </label>
-                    <div className="row compact">
+                    </button>
+                    <div className="row between">
+                      <label className="row">
+                        <input
+                          type="checkbox"
+                          aria-label={`Include page ${i + 1}`}
+                          checked={pg.selected}
+                          onChange={(e) =>
+                            update(pg.id, { selected: e.target.checked })
+                          }
+                        />
+                        <span className="tiny">Page {i + 1}</span>
+                      </label>
+                      <div className="row compact">
+                        <button
+                          className="icon-button"
+                          aria-label={`Rotate page ${i + 1}`}
+                          onClick={() =>
+                            update(pg.id, {
+                              rotation: (pg.rotation + 90) % 360,
+                            })
+                          }
+                        >
+                          <RotateCw size={13} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={`Duplicate page ${i + 1}`}
+                          onClick={() => {
+                            const a = [...p.pages];
+                            a.splice(i + 1, 0, {
+                              ...pg,
+                              id: crypto.randomUUID(),
+                            });
+                            pages(a);
+                          }}
+                        >
+                          <Copy size={13} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={`Delete page ${i + 1}`}
+                          onClick={() =>
+                            pages(p.pages.filter((v) => v.id !== pg.id))
+                          }
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="row">
                       <button
-                        className="icon-button"
-                        aria-label={`Rotate page ${i + 1}`}
-                        onClick={() =>
-                          update(pg.id, { rotation: (pg.rotation + 90) % 360 })
-                        }
+                        className="text-button tiny"
+                        disabled={i === 0}
+                        onClick={() => reorder(pg.id, -1)}
                       >
-                        <RotateCw size={13} />
+                        ↑ Up
                       </button>
                       <button
-                        className="icon-button"
-                        aria-label={`Duplicate page ${i + 1}`}
-                        onClick={() => {
-                          const a = [...p.pages];
-                          a.splice(i + 1, 0, {
-                            ...pg,
-                            id: crypto.randomUUID(),
-                          });
-                          pages(a);
-                        }}
+                        className="text-button tiny"
+                        disabled={i === p.pages.length - 1}
+                        onClick={() => reorder(pg.id, 1)}
                       >
-                        <Copy size={13} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={`Delete page ${i + 1}`}
-                        onClick={() =>
-                          pages(p.pages.filter((v) => v.id !== pg.id))
-                        }
-                      >
-                        <Trash2 size={13} />
+                        ↓ Down
                       </button>
                     </div>
                   </div>
-                  <div className="row">
-                    <button
-                      className="text-button tiny"
-                      disabled={i === 0}
-                      onClick={() => reorder(pg.id, -1)}
-                    >
-                      ↑ Up
-                    </button>
-                    <button
-                      className="text-button tiny"
-                      disabled={i === p.pages.length - 1}
-                      onClick={() => reorder(pg.id, 1)}
-                    >
-                      ↓ Down
-                    </button>
-                  </div>
-                </div>
-              )
-            );
-          })}
+                )
+              );
+            })}
         </div>
       </aside>
       <section className="canvas-area">
