@@ -2335,3 +2335,49 @@ legend {
 .editor-paper .ProseMirror:focus-visible {
   outline: none;
 }
+
+@font-face {
+  font-family: "Docy Devanagari";
+  src: url("/fonts/notosansdevanagari.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Docy Arabic";
+  src: url("/fonts/notonaskharabic.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+.review-anchor {
+  background: #fff0a8;
+}
+.review-anchor[data-review-kind="suggestion"] {
+  background: #d9efdc;
+  text-decoration: underline;
+}
+.review-panel textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+}
+.review-card {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.review-card p {
+  overflow-wrap: anywhere;
+}
+.document-contents,
+.document-endnotes {
+  margin: 16px 0;
+}
+.document-endnotes {
+  border-top: 1px solid #cbd5e1;
+  padding-top: 12px;
+}
+.nup-border-settings {
+  margin: 14px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}

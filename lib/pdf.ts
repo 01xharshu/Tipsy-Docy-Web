@@ -8,6 +8,7 @@ import {
   rectangle,
   clip,
   endPath,
+  LineCapStyle,
 } from "pdf-lib";
 import { calculateLayout } from "./layout";
 import type { Layout, Placement, Source } from "./model";
@@ -127,12 +128,31 @@ export async function exportLayout(
       target.pushOperators(popGraphicsState());
       if (layout.borders)
         target.drawRectangle({
-          x: b.cellX,
-          y: model.height - b.cellY - b.cellHeight,
-          width: b.cellWidth,
-          height: b.cellHeight,
-          borderWidth: 0.5,
-          borderColor: rgb(0.55, 0.55, 0.55),
+          x: b.x,
+          y: model.height - b.y - b.height,
+          width: b.width,
+          height: b.height,
+          borderWidth: layout.borderWidth,
+          borderColor: rgb(
+            ...(layout.borderColor
+              .slice(1)
+              .match(/../g)!
+              .map((pair) => parseInt(pair, 16) / 255) as [
+              number,
+              number,
+              number,
+            ]),
+          ),
+          borderDashArray:
+            layout.borderStyle === "dashed"
+              ? [layout.borderWidth * 4, layout.borderWidth * 2]
+              : layout.borderStyle === "dotted"
+                ? [0.1, layout.borderWidth * 2]
+                : undefined,
+          borderLineCap:
+            layout.borderStyle === "dotted"
+              ? LineCapStyle.Round
+              : LineCapStyle.Butt,
         });
       onProgress?.(++done / total);
     }

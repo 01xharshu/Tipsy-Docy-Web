@@ -999,3 +999,226 @@ test("Page-flow token mapping handles code, rules, lists and a table", async ({
     page.locator(".document-page-graphics text").filter({ hasText: /^7\.$/ }),
   ).toHaveCount(1);
 });
+
+test("Unicode direct PDF remains searchable through Arrange Pages", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  await page
+    .getByRole("textbox", { name: "Document editor" })
+    .fill("Ελληνικά\nПривет мир\nČeský dokument");
+  const exported = await exportPdf(page);
+  await fs.writeFile("evidence/unicode-document.pdf", exported.bytes);
+  const pdf = await getDocument({
+    data: exported.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
+  const text = (await (await pdf.getPage(1)).getTextContent()).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("Ελληνικά");
+  expect(text).toContain("Привет");
+  await pdf.destroy();
+  await page
+    .getByRole("button", { name: "Arrange pages", exact: false })
+    .click();
+  await expect(page.getByTestId("output-sheet")).toHaveCount(1);
+  const arranged = await exportPdf(page);
+  const result = await PDFDocument.load(arranged.bytes);
+  expect(result.getPageCount()).toBe(1);
+  const reopened = await getDocument({
+    data: arranged.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
+  const arrangedText = (
+    await (await reopened.getPage(1)).getTextContent()
+  ).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(arrangedText).toContain("Ελληνικά");
+  expect(arrangedText).toContain("Привет");
+  await reopened.destroy();
+  await page
+    .getByRole("button", { name: "Document Studio", exact: true })
+    .click();
+  await page.getByRole("textbox", { name: "Document editor" }).fill("漢字");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Direct PDF currently supports" }),
+  ).toBeVisible();
+});
+
+test("Hindi and Arabic shaping exports locally and survives arrangement", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("नमस्ते भारत\nمرحبا بالعالم");
+  const exported = await exportPdf(page);
+  await fs.writeFile("evidence/shaped-document.pdf", exported.bytes);
+  const pdf = await getDocument({
+    data: exported.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
+  expect(pdf.numPages).toBe(1);
+  const text = (await (await pdf.getPage(1)).getTextContent()).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("भारत");
+  expect(text).toMatch(/مرحبا|ابحرم/);
+  await pdf.destroy();
+  await page
+    .getByRole("button", { name: "Arrange pages", exact: false })
+    .click();
+  await expect(page.getByTestId("output-sheet")).toHaveCount(1);
+  const arranged = await exportPdf(page);
+  expect((await PDFDocument.load(arranged.bytes)).getPageCount()).toBe(1);
+});
+
+test("Local anchored reviews survive reload and accept or reject replacements", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("Review this sentence");
+  await editor.press("ControlOrMeta+a");
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await page
+    .getByLabel("Review comment", { exact: true })
+    .fill("Clarify the wording");
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(editor.locator("[data-review-kind=comment]")).toHaveCount(1);
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await expect(editor.locator("[data-review-kind=comment]")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await expect(
+    page.getByText("Clarify the wording", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(editor.locator("[data-review-id]")).toHaveCount(0);
+  await editor.click();
+  await editor.press("ControlOrMeta+a");
+  await page
+    .getByLabel("Suggested replacement", { exact: true })
+    .fill("Improved sentence");
+  await page
+    .getByRole("button", { name: "Suggest replacement", exact: true })
+    .click();
+  await expect(editor).toContainText("Improved sentence");
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await expect(editor).toContainText("Review this sentence");
+  await editor.click();
+  await editor.press("ControlOrMeta+a");
+  await page
+    .getByLabel("Suggested replacement", { exact: true })
+    .fill("Final sentence");
+  await page
+    .getByRole("button", { name: "Suggest replacement", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(editor).toContainText("Final sentence");
+  await expect(editor.locator("[data-review-id]")).toHaveCount(0);
+});
+
+test("Document N-up border controls carry to page preview and vector export", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  await page
+    .getByRole("textbox", { name: "Document editor" })
+    .fill("Page with a visible outline");
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await page.getByLabel("N-up page borders", { exact: true }).check();
+  await page.getByLabel("N-up border color", { exact: true }).fill("#d02030");
+  await page.getByLabel("N-up border width", { exact: true }).fill("2.5");
+  await page
+    .getByLabel("N-up border style", { exact: true })
+    .selectOption("dashed");
+  await page.getByRole("button", { name: /Arrange pages/i }).click();
+  const cell = page.locator(".placed-page").first();
+  await expect(cell).toHaveCSS("outline-style", "dashed");
+  await expect(cell).toHaveCSS("outline-color", "rgb(208, 32, 48)");
+  const file = await exportPdf(page);
+  await fs.writeFile("evidence/document-nup-border.pdf", file.bytes);
+  const pdf = await PDFDocument.load(file.bytes);
+  expect(pdf.getPageCount()).toBe(1);
+  await page
+    .getByRole("button", { name: "Document Studio", exact: true })
+    .click();
+  await expect(page.locator(".save-status")).toContainText("Saved on this device");
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("N-up page borders", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByLabel("N-up border color", { exact: true }),
+  ).toHaveValue("#d02030");
+  await page.getByRole("button", { name: /Arrange pages/i }).click();
+  await expect(page.locator(".placed-page").first()).toHaveCSS(
+    "outline-style",
+    "dashed",
+  );
+});
+test("Automatic contents follows headings and endnotes persist and export", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("Chapter one");
+  await editor.press("ControlOrMeta+a");
+  await page.getByLabel("Paragraph style", { exact: true }).selectOption("h1");
+  await editor.press("ArrowRight");
+  await editor.press("Enter");
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Insert automatic contents", exact: true })
+    .click();
+  await expect(editor.locator("section[data-type=contents]")).toContainText(
+    "Chapter one",
+  );
+  await editor.locator("h1").fill("Revised chapter");
+  await expect(editor.locator("section[data-type=contents]")).toContainText(
+    "Revised chapter",
+  );
+  await editor.locator("h1").click();
+  await editor.press("End");
+  await page
+    .getByLabel("Endnote text", { exact: true })
+    .fill("A supporting note");
+  await page
+    .getByRole("button", { name: "Insert endnote", exact: true })
+    .click();
+  await expect(editor.locator("section[data-type=endnotes]")).toContainText(
+    "A supporting note",
+  );
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await expect(editor.locator("section[data-type=endnotes]")).toContainText(
+    "A supporting note",
+  );
+  const exported = await exportPdf(page);
+  const pdf = await getDocument({
+    data: exported.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
+  const text = (await (await pdf.getPage(1)).getTextContent()).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("A supporting note");
+  await pdf.destroy();
+});

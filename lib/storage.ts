@@ -113,7 +113,10 @@ const backupSchema = z.object({
     fit: z.enum(["fit", "fill"]),
     align: z.enum(["center", "start", "end"]),
     background: color,
-    borders: z.boolean(),
+    borders: z.boolean().default(false),
+    borderColor: color.default("#53634a"),
+    borderWidth: finite.min(0.25).max(12).default(1),
+    borderStyle: z.enum(["solid", "dashed", "dotted"]).default("solid"),
   }),
   doc: z.object({
     ...dimensionsSchema,

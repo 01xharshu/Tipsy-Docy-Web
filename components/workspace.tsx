@@ -235,7 +235,13 @@ export default function Workspace() {
         sources: [result.source],
         pages: result.pages,
         kind: "document",
-        layout: { ...DEFAULT_LAYOUT },
+        layout: {
+          ...DEFAULT_LAYOUT,
+          borders: p.layout.borders,
+          borderColor: p.layout.borderColor,
+          borderWidth: p.layout.borderWidth,
+          borderStyle: p.layout.borderStyle,
+        },
       });
       setView("pdf");
       report(

@@ -1,6 +1,14 @@
 "use client";
 /* Local data-URL images must stay browser-local. */
 import { useEditor, EditorContent } from "@tiptap/react";
+import StructureControls from "./document-structure";
+import {
+  Contents,
+  Endnotes,
+  DocumentStructure,
+} from "@/lib/document-structure";
+import DocumentReview from "./document-review";
+import { ReviewMark } from "@/lib/review";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -172,6 +180,10 @@ export default function DocumentStudio({
       StarterKit.configure({
         link: { openOnClick: false, protocols: ["https", "http", "mailto"] },
       }),
+      Contents,
+      Endnotes,
+      DocumentStructure,
+      ReviewMark,
       Superscript,
       Subscript,
       TextStyle,
@@ -233,6 +245,7 @@ export default function DocumentStudio({
   }, [report, editor]);
   useEffect(() => {
     const timer = setTimeout(recompute, 250);
+    void document.fonts.ready.then(recompute);
     return () => clearTimeout(timer);
   }, [p.html, p.doc, recompute, showEditor]);
   useEffect(() => {
@@ -530,6 +543,8 @@ export default function DocumentStudio({
             value={editor?.getAttributes("textStyle").fontFamily || "Arial"}
           >
             <option>Arial</option>
+            <option value="Docy Devanagari">Noto Devanagari</option>
+            <option value="Docy Arabic">Noto Arabic</option>
             <option>Georgia</option>
             <option>Times New Roman</option>
             <option>Courier New</option>
@@ -1099,6 +1114,8 @@ export default function DocumentStudio({
         {showSettings && (
           <aside className="properties document-properties">
             <h2>Document settings</h2>
+            {editor && <DocumentReview editor={editor} />}
+            {editor && <StructureControls editor={editor} />}
             <fieldset>
               <legend>Page setup</legend>
               {customPresets.length > 0 && (
@@ -1333,6 +1350,95 @@ export default function DocumentStudio({
                 {spacingControl("Paragraph padding left", "paddingLeft")}
                 {spacingControl("Paragraph padding right", "paddingRight")}
               </div>
+              <fieldset className="nup-border-settings">
+                <legend>N-up page borders</legend>
+                <p className="tiny muted">
+                  Outline each placed document page after Arrange Pages. These
+                  settings carry into PDF Studio and PDF export.
+                </p>
+                <label className="row tiny">
+                  <input
+                    aria-label="N-up page borders"
+                    type="checkbox"
+                    checked={p.layout.borders}
+                    onChange={(event) =>
+                      change({
+                        ...p,
+                        layout: { ...p.layout, borders: event.target.checked },
+                      })
+                    }
+                  />{" "}
+                  Show a border around each page
+                </label>
+                {p.layout.borders && (
+                  <div className="two-fields">
+                    <label className="field">
+                      Border color
+                      <input
+                        aria-label="N-up border color"
+                        type="color"
+                        value={p.layout.borderColor}
+                        onChange={(event) =>
+                          change({
+                            ...p,
+                            layout: {
+                              ...p.layout,
+                              borderColor: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      Border width (pt)
+                      <input
+                        aria-label="N-up border width"
+                        type="number"
+                        min="0.25"
+                        max="12"
+                        step="0.25"
+                        value={p.layout.borderWidth}
+                        onChange={(event) =>
+                          change({
+                            ...p,
+                            layout: {
+                              ...p.layout,
+                              borderWidth: Math.max(
+                                0.25,
+                                Math.min(
+                                  12,
+                                  Number(event.target.value) || 0.25,
+                                ),
+                              ),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      Border style
+                      <select
+                        aria-label="N-up border style"
+                        value={p.layout.borderStyle}
+                        onChange={(event) =>
+                          change({
+                            ...p,
+                            layout: {
+                              ...p.layout,
+                              borderStyle: event.target
+                                .value as typeof p.layout.borderStyle,
+                            },
+                          })
+                        }
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="dashed">Dashed</option>
+                        <option value="dotted">Dotted</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+              </fieldset>
               <label className="row tiny">
                 <input
                   type="checkbox"

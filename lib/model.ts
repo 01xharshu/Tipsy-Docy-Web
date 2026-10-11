@@ -31,6 +31,9 @@ export type Layout = {
   align: "center" | "start" | "end";
   background: string;
   borders: boolean;
+  borderColor: string;
+  borderWidth: number;
+  borderStyle: "solid" | "dashed" | "dotted";
 };
 export const SIZES: Record<string, [number, number]> = {
   A4: [595.276, 841.89],
@@ -54,6 +57,9 @@ export const DEFAULT_LAYOUT: Layout = {
   align: "center",
   background: "#ffffff",
   borders: false,
+  borderColor: "#53634a",
+  borderWidth: 1,
+  borderStyle: "solid",
 };
 export type DocumentSettings = {
   size: string;

@@ -518,9 +518,7 @@ export default function PdfStudio({ project: p, change, report }: Props) {
                           top: b.cellY * zoom,
                           width: b.cellWidth * zoom,
                           height: b.cellHeight * zoom,
-                          border: p.layout.borders
-                            ? "1px solid #999"
-                            : undefined,
+                          border: undefined,
                         }}
                       >
                         <div
@@ -542,6 +540,10 @@ export default function PdfStudio({ project: p, change, report }: Props) {
                             width: b.width * zoom,
                             height: b.height * zoom,
                             touchAction: pan ? "auto" : "none",
+                            outline: p.layout.borders
+                              ? `${p.layout.borderWidth * zoom}px ${p.layout.borderStyle} ${p.layout.borderColor}`
+                              : undefined,
+                            outlineOffset: `-${Math.max(0.5, p.layout.borderWidth * zoom)}px`,
                           }}
                           onClick={() => setSelected(b.page.id)}
                           onKeyDown={(e) => {
@@ -840,11 +842,60 @@ export default function PdfStudio({ project: p, change, report }: Props) {
           <label className="row tiny">
             <input
               type="checkbox"
+              aria-label="Page borders"
               checked={p.layout.borders}
               onChange={(e) => layout({ borders: e.target.checked })}
             />{" "}
             Page borders
           </label>
+          {p.layout.borders && (
+            <div className="two-fields">
+              <label className="field">
+                Border color
+                <input
+                  aria-label="Page border color"
+                  type="color"
+                  value={p.layout.borderColor}
+                  onChange={(e) => layout({ borderColor: e.target.value })}
+                />
+              </label>
+              <label className="field">
+                Border width (pt)
+                <input
+                  aria-label="Page border width"
+                  type="number"
+                  min="0.25"
+                  max="12"
+                  step="0.25"
+                  value={p.layout.borderWidth}
+                  onChange={(e) =>
+                    layout({
+                      borderWidth: Math.max(
+                        0.25,
+                        Math.min(12, Number(e.target.value) || 0.25),
+                      ),
+                    })
+                  }
+                />
+              </label>
+              <label className="field">
+                Border style
+                <select
+                  aria-label="Page border style"
+                  value={p.layout.borderStyle}
+                  onChange={(e) =>
+                    layout({
+                      borderStyle: e.target.value as Layout["borderStyle"],
+                    })
+                  }
+                >
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </label>
+            </div>
+          )}
         </fieldset>
         {active && (
           <fieldset>

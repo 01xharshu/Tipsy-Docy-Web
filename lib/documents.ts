@@ -1,3 +1,4 @@
+import { prepareUnicodeFonts } from "./pdf-fonts";
 import DOMPurify from "dompurify";
 import { dimensions, type DocumentSettings } from "./model";
 if (typeof window !== "undefined")
@@ -165,6 +166,7 @@ export function paginate(
   };
   const semantic = new Set([
     "P",
+    "SECTION",
     "PRE",
     "H1",
     "H2",
@@ -360,7 +362,12 @@ export function paginate(
         lastTop = rect.top;
       } else {
         run.text += node.textContent[i];
-        run.width = rect.right - base.left + margin - run.x;
+        const right = Math.max(
+          run.x + run.width,
+          rect.right - base.left + margin,
+        );
+        run.x = Math.min(run.x, rect.left - base.left + margin);
+        run.width = right - run.x;
       }
     }
     tokenOffset += node.textContent.length;
@@ -372,12 +379,30 @@ export async function documentPdf(
   model: DocModel,
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  const texts = [
+    model.header,
+    model.footer,
+    ...model.pages.flatMap((page) => page.text.map((run) => run.text)),
+  ];
+  if (
+    texts.some((text) =>
+      /[\u0600-\u08ff\u0900-\u097f\ufb50-\ufeff]/u.test(text),
+    )
+  ) {
+    const { shapedPdf } = await import("./shaped-pdf");
+    return shapedPdf(model, signal);
+  }
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
     unit: "pt",
     format: [model.width, model.height],
     orientation: model.width > model.height ? "landscape" : "portrait",
   });
+  const unicode = await prepareUnicodeFonts(pdf, [
+    model.header,
+    model.footer,
+    ...model.pages.flatMap((page) => page.text.map((run) => run.text)),
+  ]);
   for (let i = 0; i < model.pages.length; i++) {
     signal?.throwIfAborted();
     if (i % 4 === 0)
@@ -405,7 +430,7 @@ export async function documentPdf(
           ? "times"
           : "helvetica";
       pdf.setFont(
-        family,
+        unicode ? "LocalUnicode" : family,
         t.bold
           ? t.italic
             ? "bolditalic"
@@ -479,7 +504,7 @@ export async function documentPdf(
         }
       }
     }
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont(unicode ? "LocalUnicode" : "helvetica", "normal");
     pdf.setFontSize(9);
     pdf.setTextColor("#64748b");
     pdf.text(model.header, model.margin, Math.max(14, model.margin / 2));
