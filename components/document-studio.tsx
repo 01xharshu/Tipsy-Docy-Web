@@ -12,6 +12,7 @@ import { ReviewMark } from "@/lib/review";
 import { Equation } from "@/lib/equation";
 import { Bibliography, Citation, CitationBibliography } from "@/lib/citations";
 import { ColumnSection } from "@/lib/columns";
+import { Footnote } from "@/lib/footnotes";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -190,6 +191,8 @@ export default function DocumentStudio({
       Bibliography,
       CitationBibliography,
       ColumnSection,
+      Footnote,
+      Footnote,
       DocumentStructure,
       ReviewMark,
       Superscript,
@@ -1077,6 +1080,30 @@ export default function DocumentStudio({
                           )}
                         </g>
                       ))}
+                      {pg.footnotes.length > 0 && (
+                        <line
+                          x1={model.margin}
+                          x2={model.margin + Math.min(180, model.width * 0.32)}
+                          y1={pg.footnotes[0].y - 7}
+                          y2={pg.footnotes[0].y - 7}
+                          stroke="#94a3b8"
+                          strokeWidth={0.6}
+                        />
+                      )}
+                      {pg.footnotes.flatMap((footnote, j) =>
+                        footnote.lines.map((line, lineIndex) => (
+                          <text
+                            key={`footnote-${j}-${lineIndex}`}
+                            x={model.margin}
+                            y={footnote.y + lineIndex * 10}
+                            fontSize={8}
+                            fontFamily="Arial, sans-serif"
+                            fill="#334155"
+                          >
+                            {line}
+                          </text>
+                        )),
+                      )}
                       <text
                         x={model.margin}
                         y={model.height - Math.max(14, model.margin / 2)}

@@ -27,6 +27,13 @@ export async function exportDocx(html: string, settings: DocumentSettings) {
     if (node.nodeType === 3)
       return [new d.TextRun({ ...style, text: node.textContent || "" })];
     if (!(node instanceof HTMLElement)) return [];
+    if (node.dataset.type === "footnote")
+      return [
+        new d.TextRun({
+          ...style,
+          text: `${node.dataset.number || "1"} (Footnote: ${node.dataset.note || ""})`,
+        }),
+      ];
     if (node.tagName === "BR") return [new d.TextRun({ break: 1 })];
     const next: RunStyle = {
       ...style,

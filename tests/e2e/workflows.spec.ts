@@ -1223,6 +1223,30 @@ test("Automatic contents follows headings and endnotes persist and export", asyn
   await pdf.destroy();
 });
 
+test("Page footnotes follow their marker into the shared preview and PDF page model", async ({ page }) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("A sentence with a source");
+  await editor.press("End");
+  await page.getByRole("button", { name: "Document settings", exact: true }).click();
+  await page.getByLabel("Page footnote text", { exact: true }).fill("Source note stays at the bottom of this page");
+  await page.getByRole("button", { name: "Insert page footnote", exact: true }).click();
+  await expect(editor.locator('sup[data-type="footnote"]')).toHaveText("1");
+  const previewNote = page.locator(".document-page-graphics text").filter({ hasText: "1. Source note stays at the bottom" });
+  await expect(previewNote).toBeVisible();
+  const previewY = Number(await previewNote.getAttribute("y"));
+  const exported = await exportPdf(page);
+  const pdf = await PDFDocument.load(exported.bytes);
+  expect(pdf.getPageCount()).toBe(1);
+  const parsed = await getDocument({ data: Uint8Array.from(exported.bytes), useSystemFonts: true }).promise;
+  const content = await (await parsed.getPage(1)).getTextContent();
+  const note = content.items.find((item) => "str" in item && item.str.includes("1. Source note stays at the bottom"));
+  if (!note || !("transform" in note)) throw new Error("Footnote text missing from PDF");
+  expect(pdf.getPage(0).getHeight() - note.transform[5]).toBeCloseTo(previewY, 1);
+  expect(previewY).toBeGreaterThan(pdf.getPage(0).getHeight() * 0.75);
+  await parsed.destroy();
+});
+
 test("Structured citations update style, bibliography, saved project and PDF", async ({ page }) => {
   await page.goto("/studio?mode=document");
   const editor = page.getByRole("textbox", { name: "Document editor" });

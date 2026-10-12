@@ -127,6 +127,18 @@ export async function shapedPdf(
         width: image.width,
         height: image.height,
       });
+    for (const footnote of page.footnotes) {
+      for (const [lineIndex, line] of footnote.lines.entries()) {
+        await selectFont({ text: line, bold: false, italic: false });
+        pdf
+          .fontSize(8)
+          .fillColor("#334155")
+          .text(line, model.margin, footnote.y + lineIndex * 10, {
+            lineBreak: false,
+            baseline: "alphabetic",
+          });
+      }
+    }
     for (const [text, x, y] of [
       [model.header, model.margin, Math.max(14, model.margin / 2)],
       [

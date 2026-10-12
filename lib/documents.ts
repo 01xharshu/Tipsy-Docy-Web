@@ -108,10 +108,12 @@ export type DrawBox = {
   height: number;
   color: string;
 };
+export type DrawFootnote = { number: number; lines: string[]; y: number };
 export type DocPage = {
   text: TextRun[];
   images: DrawImage[];
   boxes: DrawBox[];
+  footnotes: DrawFootnote[];
 };
 export type DocModel = {
   width: number;
@@ -137,14 +139,28 @@ export function paginate(
 ): DocModel {
   const [width, height] = dimensions(settings),
     margin = settings.margin,
-    usable = height - 2 * margin;
+    markerNodes = [
+      ...root.querySelectorAll<HTMLElement>('sup[data-type="footnote"]'),
+    ],
+    estimatedFootnoteLines = markerNodes.reduce(
+      (sum, marker) =>
+        sum + Math.max(1, Math.ceil((marker.dataset.note || "").length / 92)),
+      0,
+    ),
+    footnoteReserve = markerNodes.length
+      ? Math.max(
+          0,
+          Math.min(height - 2 * margin - 80, 28 + estimatedFootnoteLines * 10),
+        )
+      : 0,
+    usable = height - 2 * margin - footnoteReserve;
   if (usable < 80 || width - 2 * margin < 80)
     throw new Error("Reduce margins to leave room for document content.");
   const model: DocModel = {
     width,
     height,
     margin,
-    pages: [{ text: [], images: [], boxes: [] }],
+    pages: [{ text: [], images: [], boxes: [], footnotes: [] }],
     background: settings.background,
     header: settings.header,
     footer: settings.footer,
@@ -154,7 +170,7 @@ export function paginate(
   const base = root.getBoundingClientRect();
   const page = (i: number) => {
     while (model.pages.length <= i)
-      model.pages.push({ text: [], images: [], boxes: [] });
+      model.pages.push({ text: [], images: [], boxes: [], footnotes: [] });
     return model.pages[i];
   };
 
@@ -202,6 +218,35 @@ export function paginate(
   let node: Node | null;
   while ((node = walker.nextNode())) {
     if (node instanceof HTMLElement) {
+      if (node.dataset.type === "footnote") {
+        const rect = node.getBoundingClientRect(),
+          position = rect.top - base.top + extra,
+          index = Math.max(0, Math.floor(position / usable)),
+          note = (node.dataset.note || "").trim(),
+          words = note.split(/\s+/),
+          lines: string[] = [];
+        let line = "";
+        for (const word of words) {
+          const candidate = line ? `${line} ${word}` : word;
+          if (candidate.length > 92 && line) {
+            lines.push(line);
+            line = word;
+          } else line = candidate;
+        }
+        if (line) lines.push(line);
+        const target = page(index),
+          previousLines = target.footnotes.reduce((sum, item) => sum + item.lines.length, 0),
+          number = Number(node.dataset.number) || 1;
+        target.footnotes.push({
+          number,
+          lines: lines.map((text, lineIndex) =>
+            lineIndex === 0 ? `${number}. ${text}` : text,
+          ),
+          y: height - margin - footnoteReserve + 10 + previousLines * 10,
+        });
+        tokenOffset++;
+        continue;
+      }
       const isBreak = node.dataset.type === "pageBreak";
       const isBlock =
         semantic.has(node.tagName) ||
@@ -392,6 +437,9 @@ export async function documentPdf(
     model.header,
     model.footer,
     ...model.pages.flatMap((page) => page.text.map((run) => run.text)),
+    ...model.pages.flatMap((page) =>
+      page.footnotes.flatMap((footnote) => footnote.lines),
+    ),
   ];
   if (
     texts.some((text) =>
@@ -411,6 +459,9 @@ export async function documentPdf(
     model.header,
     model.footer,
     ...model.pages.flatMap((page) => page.text.map((run) => run.text)),
+    ...model.pages.flatMap((page) =>
+      page.footnotes.flatMap((footnote) => footnote.lines),
+    ),
   ]);
   for (let i = 0; i < model.pages.length; i++) {
     signal?.throwIfAborted();
@@ -477,6 +528,13 @@ export async function documentPdf(
         );
       }
     }
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(51, 65, 85);
+    for (const footnote of p.footnotes)
+      footnote.lines.forEach((line, lineIndex) =>
+        pdf.text(line, model.margin, footnote.y + lineIndex * 10),
+      );
     for (const img of p.images) {
       try {
         pdf.addImage(img.src, img.x, img.y, img.width, img.height);
@@ -512,6 +570,11 @@ export async function documentPdf(
           );
         }
       }
+    }
+    if (p.footnotes.length) {
+      pdf.setDrawColor(148, 163, 184);
+      pdf.setLineWidth(0.6);
+      pdf.line(model.margin, p.footnotes[0].y - 7, model.margin + Math.min(180, model.width * 0.32), p.footnotes[0].y - 7);
     }
     pdf.setFont(unicode ? "LocalUnicode" : "helvetica", "normal");
     pdf.setFontSize(9);

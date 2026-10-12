@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import type { CitationStyle } from "@/lib/citations";
 export default function StructureControls({ editor }: { editor: Editor }) {
   const [note, setNote] = useState("");
+  const [footnote, setFootnote] = useState("");
   const [author, setAuthor] = useState("");
   const [year, setYear] = useState("");
   const [title, setTitle] = useState("");
@@ -47,6 +48,24 @@ export default function StructureControls({ editor }: { editor: Editor }) {
       );
     editor.view.dispatch(tr);
     setNote("");
+  }
+  function addFootnote() {
+    const value = footnote.trim();
+    if (!value) return;
+    let number = 1;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "footnote")
+        number = Math.max(number, Number(node.attrs.number) + 1);
+    });
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "footnote",
+        attrs: { id: `footnote-${crypto.randomUUID()}`, number, note: value },
+      })
+      .run();
+    setFootnote("");
   }
   function insertCitation() {
     const cleanAuthor = author.trim();
@@ -161,6 +180,22 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         onClick={() => addNote()}
       >
         Insert endnote
+      </button>
+      <label>
+        Page footnote
+        <textarea
+          aria-label="Page footnote text"
+          value={footnote}
+          onChange={(event) => setFootnote(event.target.value)}
+        />
+      </label>
+      <button
+        className="button small full"
+        onMouseDown={(event) => event.preventDefault()}
+        disabled={!footnote.trim()}
+        onClick={addFootnote}
+      >
+        Insert page footnote
       </button>
       <label>
         Citation style
