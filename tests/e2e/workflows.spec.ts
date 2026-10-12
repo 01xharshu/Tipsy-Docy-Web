@@ -223,6 +223,59 @@ test("Document: format, table, settings, live preview, persistence, searchable e
   ).toContainText("A private workspace");
   expect(errors).toEqual([]);
 });
+
+test("Table cell formatting survives save and appears in preview, PDF and DOCX", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.waitFor();
+  await page.getByRole("button", { name: "Insert table", exact: true }).click();
+  const cell = editor.locator("th").first();
+  await cell.click();
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await page.getByLabel("Table cell fill", { exact: true }).fill("#dbeafe");
+  await page
+    .getByLabel("Table cell vertical alignment", { exact: true })
+    .selectOption("middle");
+  await page
+    .getByLabel("Table cell border color", { exact: true })
+    .fill("#ef4444");
+  await page.getByLabel("Table cell border width", { exact: true }).fill("3");
+  await expect(cell).toHaveAttribute("data-cell-fill", "#dbeafe");
+  await expect(cell).toHaveAttribute("data-cell-valign", "middle");
+  await expect(cell).toHaveAttribute("data-cell-border-color", "#ef4444");
+  await expect(cell).toHaveAttribute("data-cell-border-width", "3");
+  await expect(
+    page
+      .locator(".doc-preview-page svg rect[fill='rgb(219, 234, 254)']")
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Saved on this device", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  const restoredCell = page
+    .getByRole("textbox", { name: "Document editor" })
+    .locator("th")
+    .first();
+  await expect(restoredCell).toHaveAttribute("data-cell-fill", "#dbeafe");
+  await expect(restoredCell).toHaveAttribute("data-cell-border-width", "3");
+  const pdf = await exportPdf(page);
+  const reopened = await PDFDocument.load(pdf.bytes);
+  expect(reopened.getPageCount()).toBeGreaterThan(0);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("button", { name: "DOCX", exact: true }).click();
+  const download = await downloadPromise;
+  const docxBytes = await fs.readFile((await download.path())!);
+  const documentXml = zipText(docxBytes, "word/document.xml");
+  expect(documentXml).toContain("<w:shd");
+  expect(documentXml).toContain("<w:tcBorders");
+  expect(documentXml).toContain('<w:vAlign w:val="center"/>');
+});
 test("Malformed PDF, HTML sanitization, quick tools, responsive navigation", async ({
   page,
 }) => {
@@ -1106,7 +1159,7 @@ test("Local anchored reviews survive reload and accept or reject replacements", 
   await expect(editor.locator("[data-review-id]")).toHaveCount(0);
   await editor.getByText("Review this sentence", { exact: true }).click();
   await editor.press("ControlOrMeta+a");
-    await page
+  await page
     .getByLabel("Suggested replacement", { exact: true })
     .fill("Improved sentence");
   await page
@@ -1117,7 +1170,7 @@ test("Local anchored reviews survive reload and accept or reject replacements", 
   await expect(editor).toContainText("Review this sentence");
   await editor.getByText("Review this sentence", { exact: true }).click();
   await editor.press("ControlOrMeta+a");
-    await page
+  await page
     .getByLabel("Suggested replacement", { exact: true })
     .fill("Final sentence");
   await page
@@ -1155,7 +1208,9 @@ test("Document N-up border controls carry to page preview and vector export", as
   await page
     .getByRole("button", { name: "Document Studio", exact: true })
     .click();
-  await expect(page.locator(".save-status")).toContainText("Saved on this device");
+  await expect(page.locator(".save-status")).toContainText(
+    "Saved on this device",
+  );
   await page.reload();
   await page
     .getByRole("button", { name: "Document settings", exact: true })
@@ -1223,56 +1278,142 @@ test("Automatic contents follows headings and endnotes persist and export", asyn
   await pdf.destroy();
 });
 
-test("Page footnotes follow their marker into the shared preview and PDF page model", async ({ page }) => {
+test("Page footnotes follow their marker into the shared preview and PDF page model", async ({
+  page,
+}) => {
   await page.goto("/studio?mode=document");
   const editor = page.getByRole("textbox", { name: "Document editor" });
   await editor.fill("A sentence with a source");
   await editor.press("End");
-  await page.getByRole("button", { name: "Document settings", exact: true }).click();
-  await page.getByLabel("Page footnote text", { exact: true }).fill("Source note stays at the bottom of this page");
-  await page.getByRole("button", { name: "Insert page footnote", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  await page
+    .getByLabel("Page footnote text", { exact: true })
+    .fill("Source note stays at the bottom of this page");
+  await page
+    .getByRole("button", { name: "Insert page footnote", exact: true })
+    .click();
   await expect(editor.locator('sup[data-type="footnote"]')).toHaveText("1");
-  const previewNote = page.locator(".document-page-graphics text").filter({ hasText: "1. Source note stays at the bottom" });
+  const previewNote = page
+    .locator(".document-page-graphics text")
+    .filter({ hasText: "1. Source note stays at the bottom" });
   await expect(previewNote).toBeVisible();
   const previewY = Number(await previewNote.getAttribute("y"));
   const exported = await exportPdf(page);
   const pdf = await PDFDocument.load(exported.bytes);
   expect(pdf.getPageCount()).toBe(1);
-  const parsed = await getDocument({ data: Uint8Array.from(exported.bytes), useSystemFonts: true }).promise;
+  const parsed = await getDocument({
+    data: Uint8Array.from(exported.bytes),
+    useSystemFonts: true,
+  }).promise;
   const content = await (await parsed.getPage(1)).getTextContent();
-  const note = content.items.find((item) => "str" in item && item.str.includes("1. Source note stays at the bottom"));
-  if (!note || !("transform" in note)) throw new Error("Footnote text missing from PDF");
-  expect(pdf.getPage(0).getHeight() - note.transform[5]).toBeCloseTo(previewY, 1);
+  const note = content.items.find(
+    (item) =>
+      "str" in item && item.str.includes("1. Source note stays at the bottom"),
+  );
+  if (!note || !("transform" in note))
+    throw new Error("Footnote text missing from PDF");
+  expect(pdf.getPage(0).getHeight() - note.transform[5]).toBeCloseTo(
+    previewY,
+    1,
+  );
   expect(previewY).toBeGreaterThan(pdf.getPage(0).getHeight() * 0.75);
   await parsed.destroy();
 });
 
-test("Structured citations update style, bibliography, saved project and PDF", async ({ page }) => {
+test("Page footnote numbers update after a note is deleted", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("A statement");
+  await editor.press("End");
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  const noteInput = page.getByLabel("Page footnote text", { exact: true });
+  const insert = page.getByRole("button", {
+    name: "Insert page footnote",
+    exact: true,
+  });
+  await noteInput.fill("First source");
+  await insert.click();
+  await noteInput.fill("Second source");
+  await insert.click();
+  await expect(editor.locator('sup[data-type="footnote"]')).toHaveText([
+    "1",
+    "2",
+  ]);
+  await editor.locator('sup[data-type="footnote"]').first().click();
+  await editor.press("Backspace");
+  await expect(editor.locator('sup[data-type="footnote"]')).toHaveCount(1);
+  await expect(editor.locator('sup[data-type="footnote"]')).toHaveText("1");
+  const exported = await exportPdf(page);
+  const parsed = await getDocument({
+    data: Uint8Array.from(exported.bytes),
+    useSystemFonts: true,
+  }).promise;
+  const content = await (await parsed.getPage(1)).getTextContent();
+  const text = content.items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("1. Second source");
+  expect(text).not.toContain("First source");
+  await parsed.destroy();
+});
+
+test("Structured citations update style, bibliography, saved project and PDF", async ({
+  page,
+}) => {
   await page.goto("/studio?mode=document");
   const editor = page.getByRole("textbox", { name: "Document editor" });
   await editor.fill("Evidence supports this point");
   await editor.press("End");
-  await page.getByRole("button", { name: "Document settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
   await page.getByLabel("Citation style", { exact: true }).selectOption("ieee");
-  await page.getByLabel("Citation author", { exact: true }).fill("Ada Lovelace");
+  await page
+    .getByLabel("Citation author", { exact: true })
+    .fill("Ada Lovelace");
   await page.getByLabel("Citation year", { exact: true }).fill("1843");
-  await page.getByLabel("Citation title", { exact: true }).fill("Notes on the Analytical Engine");
-  await page.getByLabel("Citation URL", { exact: true }).fill("https://example.test/notes");
-  await page.getByRole("button", { name: "Insert source citation", exact: true }).click();
+  await page
+    .getByLabel("Citation title", { exact: true })
+    .fill("Notes on the Analytical Engine");
+  await page
+    .getByLabel("Citation URL", { exact: true })
+    .fill("https://example.test/notes");
+  await page
+    .getByRole("button", { name: "Insert source citation", exact: true })
+    .click();
   await expect(editor.locator('[data-type="citation"]')).toContainText("[1]");
-  await page.getByRole("button", { name: "Insert or update bibliography", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Insert or update bibliography", exact: true })
+    .click();
   const bibliography = editor.locator('section[data-type="bibliography"]');
   await expect(bibliography).toContainText("References");
   await expect(bibliography).toContainText("Notes on the Analytical Engine");
   await page.getByLabel("Citation style", { exact: true }).selectOption("apa");
-  await expect(editor.locator('[data-type="citation"]')).toContainText("(Ada Lovelace, 1843)");
-  await expect(bibliography).toContainText("Ada Lovelace (1843). Notes on the Analytical Engine.");
+  await expect(editor.locator('[data-type="citation"]')).toContainText(
+    "(Ada Lovelace, 1843)",
+  );
+  await expect(bibliography).toContainText(
+    "Ada Lovelace (1843). Notes on the Analytical Engine.",
+  );
   await page.getByText("Saved on this device", { exact: true }).waitFor();
   await page.reload();
-  await expect(editor.locator('[data-type="citation"]')).toContainText("(Ada Lovelace, 1843)");
-  await expect(editor.locator('section[data-type="bibliography"]')).toContainText("Notes on the Analytical Engine");
+  await expect(editor.locator('[data-type="citation"]')).toContainText(
+    "(Ada Lovelace, 1843)",
+  );
+  await expect(
+    editor.locator('section[data-type="bibliography"]'),
+  ).toContainText("Notes on the Analytical Engine");
   const exported = await exportPdf(page);
-  const pdf = await getDocument({ data: exported.bytes.slice(), useSystemFonts: true }).promise;
+  const pdf = await getDocument({
+    data: exported.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
   const text = (await (await pdf.getPage(1)).getTextContent()).items
     .map((item) => ("str" in item ? item.str : ""))
     .join(" ");
@@ -1281,42 +1422,71 @@ test("Structured citations update style, bibliography, saved project and PDF", a
   await pdf.destroy();
 });
 
-test("Column sections flow text into shared preview and searchable PDF positions", async ({ page }) => {
+test("Column sections flow text into shared preview and searchable PDF positions", async ({
+  page,
+}) => {
   await page.goto("/studio?mode=document");
   const editor = page.getByRole("textbox", { name: "Document editor" });
-  const content = Array.from({ length: 360 }, (_, i) => `ColumnFlowWord${i}`).join(" ");
+  const content = Array.from(
+    { length: 360 },
+    (_, i) => `ColumnFlowWord${i}`,
+  ).join(" ");
   await editor.fill(content);
-  await page.getByRole("button", { name: "Document settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
   await page.getByLabel("Text columns", { exact: true }).selectOption("2");
   await page.getByLabel("Column gap", { exact: true }).fill("30");
-  await page.getByRole("button", { name: "Format selection in columns", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Format selection in columns", exact: true })
+    .click();
   const section = editor.locator('section[data-type="columns"]');
   await expect(section).toHaveCSS("column-count", "2");
   await expect(section).toHaveCSS("column-gap", "30px");
   const previewPages = page.locator(".doc-preview-page");
   const previewPageCount = await previewPages.count();
   expect(previewPageCount).toBeGreaterThan(0);
-  const xPositions = await previewPages.first().locator("svg.document-page-graphics text").evaluateAll((nodes) =>
-    nodes
-      .filter((node) => node.textContent?.includes("ColumnFlowWord"))
-      .map((node) => ({ text: node.textContent, x: Number(node.getAttribute("x")) }))
-      .filter((item) => Number.isFinite(item.x)),
-  );
-  expect(Math.max(...xPositions.map((item) => item.x)) - Math.min(...xPositions.map((item) => item.x))).toBeGreaterThan(100);
+  const xPositions = await previewPages
+    .first()
+    .locator("svg.document-page-graphics text")
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => node.textContent?.includes("ColumnFlowWord"))
+        .map((node) => ({
+          text: node.textContent,
+          x: Number(node.getAttribute("x")),
+        }))
+        .filter((item) => Number.isFinite(item.x)),
+    );
+  expect(
+    Math.max(...xPositions.map((item) => item.x)) -
+      Math.min(...xPositions.map((item) => item.x)),
+  ).toBeGreaterThan(100);
   const exported = await exportPdf(page);
-  const pdf = await getDocument({ data: exported.bytes.slice(), useSystemFonts: true }).promise;
+  const pdf = await getDocument({
+    data: exported.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
   expect(pdf.numPages).toBe(previewPageCount);
-  const pdfItems = await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) =>
-    (await (await pdf.getPage(index + 1)).getTextContent()).items,
-  ));
+  const pdfItems = await Promise.all(
+    Array.from(
+      { length: pdf.numPages },
+      async (_, index) =>
+        (await (await pdf.getPage(index + 1)).getTextContent()).items,
+    ),
+  );
   const allItems = pdfItems.flat();
-  const text = allItems.map((item) => ("str" in item ? item.str : "")).join(" ");
+  const text = allItems
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
   expect(text).toContain("ColumnFlowWord359");
   expect(text.match(/ColumnFlowWord\d+/g)).toHaveLength(360);
   const exportedTextX = allItems
     .filter((item) => "str" in item && item.str.includes("ColumnFlowWord"))
     .map((item) => ("transform" in item ? item.transform[4] : 0));
-  expect(Math.max(...exportedTextX) - Math.min(...exportedTextX)).toBeGreaterThan(100);
+  expect(
+    Math.max(...exportedTextX) - Math.min(...exportedTextX),
+  ).toBeGreaterThan(100);
   await pdf.destroy();
 });
 
@@ -1331,23 +1501,34 @@ test("Local equation blocks render, edit, persist and export searchable math", a
     .click();
   const formula = String.raw`x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}`;
   await page.getByLabel("New equation LaTeX source").fill(formula);
-  await page.getByRole("button", { name: "Insert equation", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Insert equation", exact: true })
+    .click();
   const block = page.locator(".equation-block");
   await expect(block.locator(".katex-display")).toBeVisible();
-  await page.getByRole("button", { name: "Edit equation", exact: true }).click();
-  await page.getByRole("textbox", { name: "Equation LaTeX source", exact: true }).fill(String.raw`E = mc^2`);
+  await page
+    .getByRole("button", { name: "Edit equation", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Equation LaTeX source", exact: true })
+    .fill(String.raw`E = mc^2`);
   await page
     .getByRole("button", { name: "Preview equation", exact: true })
     .click();
   await expect(block.locator(".katex-display")).toContainText("mc");
   await expect(page.locator(".doc-preview-page")).toContainText("mc");
-  await expect(page.locator(".save-status")).toContainText("Saved on this device");
+  await expect(page.locator(".save-status")).toContainText(
+    "Saved on this device",
+  );
   await page.reload();
   await expect(page.locator(".equation-block .katex-display")).toContainText(
     "mc",
   );
   const file = await exportPdf(page);
-  const pdf = await getDocument({ data: file.bytes.slice(), useSystemFonts: true }).promise;
+  const pdf = await getDocument({
+    data: file.bytes.slice(),
+    useSystemFonts: true,
+  }).promise;
   const text = (await (await pdf.getPage(1)).getTextContent()).items
     .map((item) => ("str" in item ? item.str : ""))
     .join(" ");

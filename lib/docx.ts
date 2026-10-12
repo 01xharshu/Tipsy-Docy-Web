@@ -116,6 +116,49 @@ export async function exportDocx(html: string, settings: DocumentSettings) {
                   ? content
                   : [new d.Paragraph({ children: inline(cell) })],
                 columnSpan: Number(cell.getAttribute("colspan")) || 1,
+                verticalAlign:
+                  cell.getAttribute("data-cell-valign") === "middle"
+                    ? d.VerticalAlign.CENTER
+                    : cell.getAttribute("data-cell-valign") === "bottom"
+                      ? d.VerticalAlign.BOTTOM
+                      : d.VerticalAlign.TOP,
+                ...(cell.getAttribute("data-cell-fill")
+                  ? {
+                      shading: {
+                        fill: cell
+                          .getAttribute("data-cell-fill")!
+                          .replace(/^#/, "")
+                          .toUpperCase(),
+                      },
+                    }
+                  : {}),
+                ...(cell.getAttribute("data-cell-border-color")
+                  ? {
+                      borders: Object.fromEntries(
+                        ["top", "bottom", "left", "right"].map((edge) => [
+                          edge,
+                          {
+                            style: d.BorderStyle.SINGLE,
+                            size: Math.round(
+                              Math.min(
+                                12,
+                                Math.max(
+                                  0.25,
+                                  Number(
+                                    cell.getAttribute("data-cell-border-width"),
+                                  ) || 1,
+                                ),
+                              ) * 6,
+                            ),
+                            color: cell
+                              .getAttribute("data-cell-border-color")!
+                              .replace(/^#/, "")
+                              .toUpperCase(),
+                          },
+                        ]),
+                      ),
+                    }
+                  : {}),
               }),
             );
           }

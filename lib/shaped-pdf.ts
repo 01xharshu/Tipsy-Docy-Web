@@ -83,7 +83,9 @@ export async function shapedPdf(
     pdf.rect(0, 0, model.width, model.height).fill(model.background);
     const page = model.pages[i];
     for (const box of page.boxes) {
-      pdf.rect(box.x, box.y, box.width, box.height).lineWidth(0.5);
+      pdf
+        .rect(box.x, box.y, box.width, box.height)
+        .lineWidth(box.lineWidth ?? 0.5);
       if (
         box.fill &&
         box.fill !== "transparent" &&

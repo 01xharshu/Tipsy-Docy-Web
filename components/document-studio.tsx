@@ -206,8 +206,140 @@ export default function DocumentStudio({
       ResizableImage.configure({ allowBase64: true }),
       Table.configure({ resizable: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeader.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            backgroundColor: {
+              default: null,
+              parseHTML: (element) => {
+                const value = element.getAttribute("data-cell-fill") || "";
+                return /^#[\da-f]{6}$/i.test(value) ? value : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.backgroundColor
+                  ? {
+                      "data-cell-fill": attrs.backgroundColor,
+                      style: `background-color:${attrs.backgroundColor}`,
+                    }
+                  : {},
+            },
+            verticalAlign: {
+              default: "top",
+              parseHTML: (element) => {
+                const value = element.getAttribute("data-cell-valign");
+                return ["top", "middle", "bottom"].includes(value || "")
+                  ? value
+                  : "top";
+              },
+              renderHTML: (attrs) => ({
+                "data-cell-valign": attrs.verticalAlign,
+                style: `vertical-align:${attrs.verticalAlign}`,
+              }),
+            },
+            cellBorderColor: {
+              default: null,
+              parseHTML: (element) => {
+                const value =
+                  element.getAttribute("data-cell-border-color") || "";
+                return /^#[\da-f]{6}$/i.test(value) ? value : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.cellBorderColor
+                  ? {
+                      "data-cell-border-color": attrs.cellBorderColor,
+                      style: `border-color:${attrs.cellBorderColor}`,
+                    }
+                  : {},
+            },
+            cellBorderWidth: {
+              default: null,
+              parseHTML: (element) => {
+                const value = Number(
+                  element.getAttribute("data-cell-border-width"),
+                );
+                return Number.isFinite(value) && value >= 0.25 && value <= 12
+                  ? value
+                  : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.cellBorderWidth
+                  ? {
+                      "data-cell-border-width": attrs.cellBorderWidth,
+                      style: `border-width:${attrs.cellBorderWidth}px;border-style:solid`,
+                    }
+                  : {},
+            },
+          };
+        },
+      }),
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            backgroundColor: {
+              default: null,
+              parseHTML: (element) => {
+                const value = element.getAttribute("data-cell-fill") || "";
+                return /^#[\da-f]{6}$/i.test(value) ? value : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.backgroundColor
+                  ? {
+                      "data-cell-fill": attrs.backgroundColor,
+                      style: `background-color:${attrs.backgroundColor}`,
+                    }
+                  : {},
+            },
+            verticalAlign: {
+              default: "top",
+              parseHTML: (element) => {
+                const value = element.getAttribute("data-cell-valign");
+                return ["top", "middle", "bottom"].includes(value || "")
+                  ? value
+                  : "top";
+              },
+              renderHTML: (attrs) => ({
+                "data-cell-valign": attrs.verticalAlign,
+                style: `vertical-align:${attrs.verticalAlign}`,
+              }),
+            },
+            cellBorderColor: {
+              default: null,
+              parseHTML: (element) => {
+                const value =
+                  element.getAttribute("data-cell-border-color") || "";
+                return /^#[\da-f]{6}$/i.test(value) ? value : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.cellBorderColor
+                  ? {
+                      "data-cell-border-color": attrs.cellBorderColor,
+                      style: `border-color:${attrs.cellBorderColor}`,
+                    }
+                  : {},
+            },
+            cellBorderWidth: {
+              default: null,
+              parseHTML: (element) => {
+                const value = Number(
+                  element.getAttribute("data-cell-border-width"),
+                );
+                return Number.isFinite(value) && value >= 0.25 && value <= 12
+                  ? value
+                  : null;
+              },
+              renderHTML: (attrs) =>
+                attrs.cellBorderWidth
+                  ? {
+                      "data-cell-border-width": attrs.cellBorderWidth,
+                      style: `border-width:${attrs.cellBorderWidth}px;border-style:solid`,
+                    }
+                  : {},
+            },
+          };
+        },
+      }),
       TaskList,
       TaskItem.configure({ nested: true }),
       PageFlow,
@@ -1041,7 +1173,7 @@ export default function DocumentStudio({
                           height={b.height}
                           fill={b.fill || "none"}
                           stroke={b.color}
-                          strokeWidth={0.5}
+                          strokeWidth={b.lineWidth ?? 0.5}
                         />
                       ))}
                       {pg.text.map((t, j) => (
@@ -1651,6 +1783,76 @@ export default function DocumentStudio({
                     {String(text)}
                   </button>
                 ))}
+              </div>
+              <div className="two-fields table-format-controls">
+                <label className="field">
+                  Cell fill
+                  <input
+                    aria-label="Table cell fill"
+                    type="color"
+                    defaultValue="#ffffff"
+                    disabled={!editor?.isActive("table")}
+                    onChange={(event) =>
+                      editor?.commands.setCellAttribute(
+                        "backgroundColor",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <label className="field">
+                  Cell vertical alignment
+                  <select
+                    aria-label="Table cell vertical alignment"
+                    defaultValue="top"
+                    disabled={!editor?.isActive("table")}
+                    onChange={(event) =>
+                      editor?.commands.setCellAttribute(
+                        "verticalAlign",
+                        event.target.value,
+                      )
+                    }
+                  >
+                    <option value="top">Top</option>
+                    <option value="middle">Middle</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </label>
+                <label className="field">
+                  Cell border color
+                  <input
+                    aria-label="Table cell border color"
+                    type="color"
+                    defaultValue="#b7bfb1"
+                    disabled={!editor?.isActive("table")}
+                    onChange={(event) =>
+                      editor?.commands.setCellAttribute(
+                        "cellBorderColor",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <label className="field">
+                  Cell border width (px)
+                  <input
+                    aria-label="Table cell border width"
+                    type="number"
+                    min="0.25"
+                    max="12"
+                    step="0.25"
+                    defaultValue="1"
+                    disabled={!editor?.isActive("table")}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value))
+                        editor?.commands.setCellAttribute(
+                          "cellBorderWidth",
+                          Math.min(12, Math.max(0.25, value)),
+                        );
+                    }}
+                  />
+                </label>
               </div>
             </fieldset>
             <fieldset>

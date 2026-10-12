@@ -102,6 +102,7 @@ export type DrawImage = {
 };
 export type DrawBox = {
   fill?: string;
+  lineWidth?: number;
   x: number;
   y: number;
   width: number;
@@ -235,7 +236,10 @@ export function paginate(
         }
         if (line) lines.push(line);
         const target = page(index),
-          previousLines = target.footnotes.reduce((sum, item) => sum + item.lines.length, 0),
+          previousLines = target.footnotes.reduce(
+            (sum, item) => sum + item.lines.length,
+            0,
+          ),
           number = Number(node.dataset.number) || 1;
         target.footnotes.push({
           number,
@@ -364,6 +368,8 @@ export function paginate(
           height: Math.min(r.height, usable - (pos % usable)),
           color: getComputedStyle(node).borderTopColor,
           fill: getComputedStyle(node).backgroundColor,
+          lineWidth:
+            (parseFloat(getComputedStyle(node).borderTopWidth) || 0.5) * 0.75,
         });
       }
       continue;
@@ -477,7 +483,7 @@ export async function documentPdf(
     const p = model.pages[i];
     for (const b of p.boxes) {
       pdf.setDrawColor(b.color);
-      pdf.setLineWidth(0.5);
+      pdf.setLineWidth(b.lineWidth ?? 0.5);
       if (b.fill && b.fill !== "rgba(0, 0, 0, 0)" && b.fill !== "transparent") {
         pdf.setFillColor(b.fill);
         pdf.rect(b.x, b.y, b.width, b.height, "FD");
@@ -574,7 +580,12 @@ export async function documentPdf(
     if (p.footnotes.length) {
       pdf.setDrawColor(148, 163, 184);
       pdf.setLineWidth(0.6);
-      pdf.line(model.margin, p.footnotes[0].y - 7, model.margin + Math.min(180, model.width * 0.32), p.footnotes[0].y - 7);
+      pdf.line(
+        model.margin,
+        p.footnotes[0].y - 7,
+        model.margin + Math.min(180, model.width * 0.32),
+        p.footnotes[0].y - 7,
+      );
     }
     pdf.setFont(unicode ? "LocalUnicode" : "helvetica", "normal");
     pdf.setFontSize(9);
