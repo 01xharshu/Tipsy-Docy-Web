@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { reviewEntries, resolveReview } from "@/lib/review";
 
@@ -7,6 +7,25 @@ export default function DocumentReview({ editor }: { editor: Editor }) {
   const [note, setNote] = useState("");
   const [replacement, setReplacement] = useState("");
   const [error, setError] = useState("");
+  const lastSelection = useRef<{ from: number; to: number } | null>(null);
+  useEffect(() => {
+    const remember = () => {
+      const selection = editor.state.selection;
+      if (
+        !selection.empty &&
+        selection.$from.parent.isTextblock &&
+        selection.$to.parent.isTextblock
+      )
+        lastSelection.current = { from: selection.from, to: selection.to };
+    };
+    remember();
+    editor.on("selectionUpdate", remember);
+    editor.on("transaction", remember);
+    return () => {
+      editor.off("selectionUpdate", remember);
+      editor.off("transaction", remember);
+    };
+  }, [editor]);
   const state = useEditorState({
     editor,
     selector: ({ editor }) => ({
@@ -16,7 +35,14 @@ export default function DocumentReview({ editor }: { editor: Editor }) {
     }),
   });
   function add(kind: "comment" | "suggestion") {
-    const { from, to } = editor.state.selection;
+    const current = editor.state.selection;
+    const remembered = lastSelection.current;
+    const { from, to } =
+      !current.empty
+        ? current
+        : remembered && remembered.to <= editor.state.doc.content.size
+          ? remembered
+          : current;
     if (from === to) {
       setError("Select the text to comment on or replace first.");
       return;
