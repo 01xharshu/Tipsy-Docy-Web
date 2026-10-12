@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 export default function StructureControls({ editor }: { editor: Editor }) {
   const [note, setNote] = useState("");
   const [source, setSource] = useState("");
+  const [equation, setEquation] = useState("\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}");
   function addNote(citation = false) {
     const value = (citation ? source : note).trim();
     if (!value) return;
@@ -102,6 +103,32 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         onClick={() => addNote(true)}
       >
         Insert citation
+      </button>
+      <label>
+        Equation (LaTeX)
+        <textarea
+          aria-label="New equation LaTeX source"
+          value={equation}
+          maxLength={4000}
+          onChange={(event) => setEquation(event.target.value)}
+        />
+      </label>
+      <button
+        className="button small full"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          if (equation.trim())
+            editor
+              .chain()
+              .focus()
+              .insertContent({
+                type: "equation",
+                attrs: { formula: equation.trim() },
+              })
+              .run();
+        }}
+      >
+        Insert equation
       </button>
     </fieldset>
   );

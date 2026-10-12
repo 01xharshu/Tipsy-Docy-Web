@@ -1104,9 +1104,9 @@ test("Local anchored reviews survive reload and accept or reject replacements", 
   ).toBeVisible();
   await page.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(editor.locator("[data-review-id]")).toHaveCount(0);
-  await editor.click();
+  await editor.getByText("Review this sentence", { exact: true }).click();
   await editor.press("ControlOrMeta+a");
-  await page
+    await page
     .getByLabel("Suggested replacement", { exact: true })
     .fill("Improved sentence");
   await page
@@ -1115,9 +1115,9 @@ test("Local anchored reviews survive reload and accept or reject replacements", 
   await expect(editor).toContainText("Improved sentence");
   await page.getByRole("button", { name: "Reject", exact: true }).click();
   await expect(editor).toContainText("Review this sentence");
-  await editor.click();
+  await editor.getByText("Review this sentence", { exact: true }).click();
   await editor.press("ControlOrMeta+a");
-  await page
+    await page
     .getByLabel("Suggested replacement", { exact: true })
     .fill("Final sentence");
   await page
@@ -1220,5 +1220,40 @@ test("Automatic contents follows headings and endnotes persist and export", asyn
     .map((item) => ("str" in item ? item.str : ""))
     .join(" ");
   expect(text).toContain("A supporting note");
+  await pdf.destroy();
+});
+
+test("Local equation blocks render, edit, persist and export searchable math", async ({
+  page,
+}) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("Quadratic formula");
+  await page
+    .getByRole("button", { name: "Document settings", exact: true })
+    .click();
+  const formula = String.raw`x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}`;
+  await page.getByLabel("New equation LaTeX source").fill(formula);
+  await page.getByRole("button", { name: "Insert equation", exact: true }).click();
+  const block = page.locator(".equation-block");
+  await expect(block.locator(".katex-display")).toBeVisible();
+  await page.getByRole("button", { name: "Edit equation", exact: true }).click();
+  await page.getByRole("textbox", { name: "Equation LaTeX source", exact: true }).fill(String.raw`E = mc^2`);
+  await page
+    .getByRole("button", { name: "Preview equation", exact: true })
+    .click();
+  await expect(block.locator(".katex-display")).toContainText("mc");
+  await expect(page.locator(".doc-preview-page")).toContainText("mc");
+  await expect(page.locator(".save-status")).toContainText("Saved on this device");
+  await page.reload();
+  await expect(page.locator(".equation-block .katex-display")).toContainText(
+    "mc",
+  );
+  const file = await exportPdf(page);
+  const pdf = await getDocument({ data: file.bytes.slice(), useSystemFonts: true }).promise;
+  const text = (await (await pdf.getPage(1)).getTextContent()).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("mc");
   await pdf.destroy();
 });
