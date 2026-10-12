@@ -1,12 +1,18 @@
 "use client";
 import { useState } from "react";
 import type { Editor } from "@tiptap/react";
+import type { CitationStyle } from "@/lib/citations";
 export default function StructureControls({ editor }: { editor: Editor }) {
   const [note, setNote] = useState("");
-  const [source, setSource] = useState("");
+  const [author, setAuthor] = useState("");
+  const [year, setYear] = useState("");
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [page, setPage] = useState("");
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>("apa");
   const [equation, setEquation] = useState("\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}");
-  function addNote(citation = false) {
-    const value = (citation ? source : note).trim();
+  function addNote() {
+    const value = note.trim();
     if (!value) return;
     let count = 0,
       endnotesPos = -1;
@@ -39,7 +45,55 @@ export default function StructureControls({ editor }: { editor: Editor }) {
       );
     editor.view.dispatch(tr);
     setNote("");
-    setSource("");
+  }
+  function insertCitation() {
+    const cleanAuthor = author.trim();
+    const cleanTitle = title.trim();
+    if (!cleanAuthor || !cleanTitle) return;
+    const id = crypto.randomUUID();
+    let number = 1;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "citation") number = Math.max(number, Number(node.attrs.number) + 1);
+    });
+    editor.chain().focus().insertContent({
+      type: "citation",
+      attrs: {
+        id,
+        author: cleanAuthor,
+        year: year.trim(),
+        title: cleanTitle,
+        url: url.trim(),
+        page: page.trim(),
+        style: citationStyle,
+        number,
+      },
+    }).run();
+    setAuthor("");
+    setYear("");
+    setTitle("");
+    setUrl("");
+    setPage("");
+  }
+  function insertBibliography() {
+    let exists = false;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "bibliography") exists = true;
+    });
+    if (!exists)
+      editor.chain().focus().insertContent({
+        type: "bibliography",
+        attrs: { style: citationStyle },
+        content: [{ type: "paragraph" }],
+      }).run();
+  }
+  function applyCitationStyle(style: CitationStyle) {
+    setCitationStyle(style);
+    const tr = editor.state.tr;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === "citation")
+        tr.setNodeMarkup(pos, undefined, { ...node.attrs, style });
+    });
+    if (tr.docChanged) editor.view.dispatch(tr);
   }
   return (
     <fieldset>
@@ -71,8 +125,7 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         Insert automatic contents
       </button>
       <p className="tiny muted">
-        Contents update from headings. Notes and citations appear at the end of
-        the document.
+        Contents follow headings. Endnotes and the source list update with your citations.
       </p>
       <label>
         Endnote
@@ -90,20 +143,28 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         Insert endnote
       </button>
       <label>
-        Citation
-        <input
-          aria-label="Citation source"
-          value={source}
-          onChange={(event) => setSource(event.target.value)}
-        />
+        Citation style
+        <select aria-label="Citation style" value={citationStyle} onChange={(event) => applyCitationStyle(event.target.value as CitationStyle)}>
+          <option value="apa">APA (author-date)</option>
+          <option value="mla">MLA</option>
+          <option value="chicago-author-date">Chicago (author-date)</option>
+          <option value="ieee">IEEE</option>
+        </select>
       </label>
+      <label>Author<input aria-label="Citation author" value={author} onChange={(event) => setAuthor(event.target.value)} /></label>
+      <label>Year<input aria-label="Citation year" value={year} onChange={(event) => setYear(event.target.value)} /></label>
+      <label>Title<input aria-label="Citation title" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+      <label>URL (optional)<input aria-label="Citation URL" value={url} onChange={(event) => setUrl(event.target.value)} /></label>
+      {citationStyle === "mla" && <label>Page (optional)<input aria-label="Citation page" value={page} onChange={(event) => setPage(event.target.value)} /></label>}
       <button
         className="button small full"
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => addNote(true)}
+        disabled={!author.trim() || !title.trim()}
+        onClick={insertCitation}
       >
-        Insert citation
+        Insert source citation
       </button>
+      <button className="text-button tiny" onMouseDown={(event) => event.preventDefault()} onClick={insertBibliography}>Insert or update bibliography</button>
       <label>
         Equation (LaTeX)
         <textarea

@@ -1223,6 +1223,40 @@ test("Automatic contents follows headings and endnotes persist and export", asyn
   await pdf.destroy();
 });
 
+test("Structured citations update style, bibliography, saved project and PDF", async ({ page }) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  await editor.fill("Evidence supports this point");
+  await editor.press("End");
+  await page.getByRole("button", { name: "Document settings", exact: true }).click();
+  await page.getByLabel("Citation style", { exact: true }).selectOption("ieee");
+  await page.getByLabel("Citation author", { exact: true }).fill("Ada Lovelace");
+  await page.getByLabel("Citation year", { exact: true }).fill("1843");
+  await page.getByLabel("Citation title", { exact: true }).fill("Notes on the Analytical Engine");
+  await page.getByLabel("Citation URL", { exact: true }).fill("https://example.test/notes");
+  await page.getByRole("button", { name: "Insert source citation", exact: true }).click();
+  await expect(editor.locator('[data-type="citation"]')).toContainText("[1]");
+  await page.getByRole("button", { name: "Insert or update bibliography", exact: true }).click();
+  const bibliography = editor.locator('section[data-type="bibliography"]');
+  await expect(bibliography).toContainText("References");
+  await expect(bibliography).toContainText("Notes on the Analytical Engine");
+  await page.getByLabel("Citation style", { exact: true }).selectOption("apa");
+  await expect(editor.locator('[data-type="citation"]')).toContainText("(Ada Lovelace, 1843)");
+  await expect(bibliography).toContainText("Ada Lovelace (1843). Notes on the Analytical Engine.");
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await expect(editor.locator('[data-type="citation"]')).toContainText("(Ada Lovelace, 1843)");
+  await expect(editor.locator('section[data-type="bibliography"]')).toContainText("Notes on the Analytical Engine");
+  const exported = await exportPdf(page);
+  const pdf = await getDocument({ data: exported.bytes.slice(), useSystemFonts: true }).promise;
+  const text = (await (await pdf.getPage(1)).getTextContent()).items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
+  expect(text).toContain("Ada Lovelace");
+  expect(text).toContain("Notes on the Analytical Engine");
+  await pdf.destroy();
+});
+
 test("Local equation blocks render, edit, persist and export searchable math", async ({
   page,
 }) => {

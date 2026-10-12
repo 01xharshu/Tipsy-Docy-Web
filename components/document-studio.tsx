@@ -10,6 +10,7 @@ import {
 import DocumentReview from "./document-review";
 import { ReviewMark } from "@/lib/review";
 import { Equation } from "@/lib/equation";
+import { Bibliography, Citation, CitationBibliography } from "@/lib/citations";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -184,6 +185,9 @@ export default function DocumentStudio({
       Contents,
       Endnotes,
       Equation,
+      Citation,
+      Bibliography,
+      CitationBibliography,
       DocumentStructure,
       ReviewMark,
       Superscript,

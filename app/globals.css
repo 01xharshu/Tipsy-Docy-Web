@@ -2370,12 +2370,25 @@ legend {
   overflow-wrap: anywhere;
 }
 .document-contents,
-.document-endnotes {
+.document-endnotes,
+.document-bibliography {
   margin: 16px 0;
 }
-.document-endnotes {
+.document-endnotes,
+.document-bibliography {
   border-top: 1px solid #cbd5e1;
   padding-top: 12px;
+}
+.document-citation {
+  display: inline;
+  color: var(--green-700, #45633e);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.document-bibliography p {
+  padding-left: 24px;
+  text-indent: -24px;
+  overflow-wrap: anywhere;
 }
 .nup-border-settings {
   margin: 14px 0;
