@@ -37,13 +37,22 @@ if (typeof window !== "undefined")
         "border-color",
         "border-width",
         "border-style",
+        "column-count",
+        "column-gap",
       ]);
       data.attrValue = data.attrValue
         .split(";")
         .filter((rule) => {
-          const [name, ...rest] = rule.split(":");
+          const [rawName, ...rest] = rule.split(":");
+          const name = rawName.trim().toLowerCase();
+          const value = rest.join(":").trim().toLowerCase();
+          if (name === "column-count") return ["2", "3"].includes(value);
+          if (name === "column-gap") {
+            const gap = value.match(/^(\d{1,2})px$/);
+            return Boolean(gap && Number(gap[1]) <= 96);
+          }
           return (
-            allowed.has(name.trim().toLowerCase()) &&
+            allowed.has(name) &&
             !/url|expression|image-set|https?:|\\|@/i.test(rest.join(":"))
           );
         })

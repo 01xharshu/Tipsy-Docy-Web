@@ -86,10 +86,11 @@ export const Citation = Node.create({
 export const Bibliography = Node.create({
   name: "bibliography",
   group: "block",
-  content: "paragraph+",
+  content: "(heading|paragraph)+",
   isolating: true,
   addAttributes() {
     return {
+      id: { default: "", parseHTML: (e) => e.getAttribute("data-bibliography-id") || "" },
       style: { default: "apa", parseHTML: (e) => e.getAttribute("data-style") || "apa" },
     };
   },
@@ -98,6 +99,7 @@ export const Bibliography = Node.create({
     "section",
     mergeAttributes(HTMLAttributes, {
       "data-type": "bibliography",
+      "data-bibliography-id": HTMLAttributes.id,
       class: "document-bibliography",
     }),
     0,
@@ -127,7 +129,10 @@ export const CitationBibliography = Extension.create({
           const sourceList = [...sources.values()];
           const paragraphs = [
             state.schema.nodes.heading.create(
-              { level: 2 },
+              {
+                level: 2,
+                id: `${state.doc.nodeAt(bibliographyPositions[0])?.attrs.id || "bibliography"}-references`,
+              },
               state.schema.text("References"),
             ),
             ...(sourceList.length
@@ -145,7 +150,7 @@ export const CitationBibliography = Extension.create({
           for (const pos of bibliographyPositions.reverse()) {
             const current = state.doc.nodeAt(pos)!;
             const next = state.schema.nodes.bibliography.create(
-              { ...current.attrs, style },
+              { ...current.attrs, id: current.attrs.id || "bibliography", style },
               paragraphs,
             );
             if (!current.eq(next))

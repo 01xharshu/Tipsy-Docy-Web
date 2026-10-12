@@ -2390,6 +2390,26 @@ legend {
   text-indent: -24px;
   overflow-wrap: anywhere;
 }
+.document-columns {
+  display: block;
+  column-fill: balance;
+  width: 100%;
+}
+.document-columns > img,
+.document-columns > table,
+.document-columns > figure {
+  break-inside: avoid-column;
+}
+.document-columns > p,
+.document-columns > h1,
+.document-columns > h2,
+.document-columns > h3,
+.document-columns > h4,
+.document-columns > h5,
+.document-columns > h6 {
+  orphans: 2;
+  widows: 2;
+}
 .nup-border-settings {
   margin: 14px 0;
   padding: 10px;

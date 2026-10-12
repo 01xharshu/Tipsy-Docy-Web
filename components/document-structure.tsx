@@ -10,6 +10,8 @@ export default function StructureControls({ editor }: { editor: Editor }) {
   const [url, setUrl] = useState("");
   const [page, setPage] = useState("");
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("apa");
+  const [columnCount, setColumnCount] = useState(2);
+  const [columnGap, setColumnGap] = useState(24);
   const [equation, setEquation] = useState("\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}");
   function addNote() {
     const value = note.trim();
@@ -80,11 +82,15 @@ export default function StructureControls({ editor }: { editor: Editor }) {
       if (node.type.name === "bibliography") exists = true;
     });
     if (!exists)
-      editor.chain().focus().insertContent({
-        type: "bibliography",
-        attrs: { style: citationStyle },
-        content: [{ type: "paragraph" }],
-      }).run();
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(editor.state.doc.content.size, {
+          type: "bibliography",
+          attrs: { id: `bibliography-${crypto.randomUUID()}`, style: citationStyle },
+          content: [{ type: "paragraph" }],
+        })
+        .run();
   }
   function applyCitationStyle(style: CitationStyle) {
     setCitationStyle(style);
@@ -94,6 +100,20 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         tr.setNodeMarkup(pos, undefined, { ...node.attrs, style });
     });
     if (tr.docChanged) editor.view.dispatch(tr);
+  }
+  function applyColumns() {
+    if (editor.isActive("columnSection")) {
+      editor.commands.updateAttributes("columnSection", {
+        count: columnCount,
+        gap: columnGap,
+      });
+      return;
+    }
+    editor
+      .chain()
+      .focus()
+      .wrapIn("columnSection", { count: columnCount, gap: columnGap })
+      .run();
   }
   return (
     <fieldset>
@@ -165,6 +185,22 @@ export default function StructureControls({ editor }: { editor: Editor }) {
         Insert source citation
       </button>
       <button className="text-button tiny" onMouseDown={(event) => event.preventDefault()} onClick={insertBibliography}>Insert or update bibliography</button>
+      <hr />
+      <label>
+        Columns
+        <select aria-label="Text columns" value={columnCount} onChange={(event) => setColumnCount(Number(event.target.value))}>
+          <option value={2}>2 columns</option>
+          <option value={3}>3 columns</option>
+        </select>
+      </label>
+      <label>
+        Column gap (px)
+        <input aria-label="Column gap" type="number" min={0} max={96} value={columnGap} onChange={(event) => setColumnGap(Math.max(0, Math.min(96, Number(event.target.value) || 0)))} />
+      </label>
+      <button className="button small full" onMouseDown={(event) => event.preventDefault()} onClick={applyColumns}>
+        {editor.isActive("columnSection") ? "Update selected columns" : "Format selection in columns"}
+      </button>
+      <p className="tiny muted">Select paragraphs first, or place the cursor in a paragraph to format that paragraph as a column section.</p>
       <label>
         Equation (LaTeX)
         <textarea

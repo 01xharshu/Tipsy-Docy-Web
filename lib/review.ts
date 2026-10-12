@@ -1,4 +1,31 @@
 import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+
+export function reviewableTextRange(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): { from: number; to: number } | null {
+  if (from >= to) return null;
+  const $from = doc.resolve(from);
+  const $to = doc.resolve(to);
+  if ($from.parent.isTextblock && $from.parent === $to.parent)
+    return { from, to };
+
+  const blocks: { start: number; end: number }[] = [];
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isTextblock) return;
+    const start = pos + 1;
+    const end = pos + node.nodeSize - 1;
+    if (Math.max(from, start) < Math.min(to, end)) blocks.push({ start, end });
+    return false;
+  });
+  if (blocks.length !== 1) return null;
+  const block = blocks[0];
+  if (from <= block.start - 1 && to >= block.end + 1)
+    return { from: block.start, to: block.end };
+  return null;
+}
 
 export const ReviewMark = Mark.create({
   name: "review",

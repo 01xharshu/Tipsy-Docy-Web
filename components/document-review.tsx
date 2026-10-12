@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
-import { reviewEntries, resolveReview } from "@/lib/review";
+import {
+  reviewEntries,
+  resolveReview,
+  reviewableTextRange,
+} from "@/lib/review";
 
 export default function DocumentReview({ editor }: { editor: Editor }) {
   const [note, setNote] = useState("");
@@ -11,12 +15,12 @@ export default function DocumentReview({ editor }: { editor: Editor }) {
   useEffect(() => {
     const remember = () => {
       const selection = editor.state.selection;
-      if (
-        !selection.empty &&
-        selection.$from.parent.isTextblock &&
-        selection.$to.parent.isTextblock
-      )
-        lastSelection.current = { from: selection.from, to: selection.to };
+      if (!selection.empty)
+        lastSelection.current = reviewableTextRange(
+          editor.state.doc,
+          selection.from,
+          selection.to,
+        );
     };
     remember();
     editor.on("selectionUpdate", remember);
@@ -37,16 +41,19 @@ export default function DocumentReview({ editor }: { editor: Editor }) {
   function add(kind: "comment" | "suggestion") {
     const current = editor.state.selection;
     const remembered = lastSelection.current;
-    const { from, to } =
-      !current.empty
-        ? current
-        : remembered && remembered.to <= editor.state.doc.content.size
-          ? remembered
-          : current;
-    if (from === to) {
+    const selected = !current.empty
+      ? reviewableTextRange(editor.state.doc, current.from, current.to)
+      : null;
+    const range = !current.empty
+      ? selected
+      : remembered && remembered.to <= editor.state.doc.content.size
+        ? remembered
+        : null;
+    if (!range) {
       setError("Select the text to comment on or replace first.");
       return;
     }
+    const { from, to } = range;
     if (editor.state.doc.rangeHasMark(from, to, editor.schema.marks.review)) {
       setError("Resolve the existing review on this text first.");
       return;
@@ -77,6 +84,7 @@ export default function DocumentReview({ editor }: { editor: Editor }) {
       );
     else tr.addMark(from, to, editor.schema.marks.review.create(attrs));
     editor.view.dispatch(tr);
+    if (kind === "suggestion") lastSelection.current = null;
     setError("");
     setNote("");
     setReplacement("");

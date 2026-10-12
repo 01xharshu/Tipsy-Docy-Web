@@ -1257,6 +1257,45 @@ test("Structured citations update style, bibliography, saved project and PDF", a
   await pdf.destroy();
 });
 
+test("Column sections flow text into shared preview and searchable PDF positions", async ({ page }) => {
+  await page.goto("/studio?mode=document");
+  const editor = page.getByRole("textbox", { name: "Document editor" });
+  const content = Array.from({ length: 360 }, (_, i) => `ColumnFlowWord${i}`).join(" ");
+  await editor.fill(content);
+  await page.getByRole("button", { name: "Document settings", exact: true }).click();
+  await page.getByLabel("Text columns", { exact: true }).selectOption("2");
+  await page.getByLabel("Column gap", { exact: true }).fill("30");
+  await page.getByRole("button", { name: "Format selection in columns", exact: true }).click();
+  const section = editor.locator('section[data-type="columns"]');
+  await expect(section).toHaveCSS("column-count", "2");
+  await expect(section).toHaveCSS("column-gap", "30px");
+  const previewPages = page.locator(".doc-preview-page");
+  const previewPageCount = await previewPages.count();
+  expect(previewPageCount).toBeGreaterThan(0);
+  const xPositions = await previewPages.first().locator("svg.document-page-graphics text").evaluateAll((nodes) =>
+    nodes
+      .filter((node) => node.textContent?.includes("ColumnFlowWord"))
+      .map((node) => ({ text: node.textContent, x: Number(node.getAttribute("x")) }))
+      .filter((item) => Number.isFinite(item.x)),
+  );
+  expect(Math.max(...xPositions.map((item) => item.x)) - Math.min(...xPositions.map((item) => item.x))).toBeGreaterThan(100);
+  const exported = await exportPdf(page);
+  const pdf = await getDocument({ data: exported.bytes.slice(), useSystemFonts: true }).promise;
+  expect(pdf.numPages).toBe(previewPageCount);
+  const pdfItems = await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) =>
+    (await (await pdf.getPage(index + 1)).getTextContent()).items,
+  ));
+  const allItems = pdfItems.flat();
+  const text = allItems.map((item) => ("str" in item ? item.str : "")).join(" ");
+  expect(text).toContain("ColumnFlowWord359");
+  expect(text.match(/ColumnFlowWord\d+/g)).toHaveLength(360);
+  const exportedTextX = allItems
+    .filter((item) => "str" in item && item.str.includes("ColumnFlowWord"))
+    .map((item) => ("transform" in item ? item.transform[4] : 0));
+  expect(Math.max(...exportedTextX) - Math.min(...exportedTextX)).toBeGreaterThan(100);
+  await pdf.destroy();
+});
+
 test("Local equation blocks render, edit, persist and export searchable math", async ({
   page,
 }) => {
